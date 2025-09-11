@@ -62,12 +62,12 @@
     import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
 
-    // ✅ Your Firebase config with correct bucket
+    // ✅ Correct Firebase config with appspot.com bucket
     const firebaseConfig = {
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
       authDomain: "pianoinv.firebaseapp.com",
       projectId: "pianoinv",
-      storageBucket: "pianoinv.firebasestorage.app",   // ✅ Fixed to your real bucket
+      storageBucket: "pianoinv.appspot.com",   // ✅ FIXED
       messagingSenderId: "651707888262",
       appId: "1:651707888262:web:23131a782e31a7bb511707",
       measurementId: "G-1XQLEV28JZ"
@@ -145,13 +145,9 @@
 
     async function uploadPhoto(file) {
       try {
-        console.log("Starting upload to Storage...");
         const fileRef = ref(storage, 'piano_photos/' + Date.now() + '_' + file.name);
-        const snapshot = await uploadBytes(fileRef, file);
-        console.log("Upload complete:", snapshot.metadata.fullPath);
-        const url = await getDownloadURL(fileRef);
-        console.log("Download URL:", url);
-        return url;
+        await uploadBytes(fileRef, file);
+        return await getDownloadURL(fileRef);
       } catch (err) {
         console.error("Upload error:", err);
         alert("Upload error: " + err.message);
@@ -161,7 +157,6 @@
 
     // --- Add Piano ---
     async function addPiano() {
-      console.log("Add button clicked");
       if (!brandInput.value || !modelInput.value) {
         alert("Enter brand and model");
         return;
@@ -170,7 +165,6 @@
       try {
         let photoURL = "";
         if (droppedFile) {
-          console.log("Uploading photo:", droppedFile.name);
           photoURL = await uploadPhoto(droppedFile);
         }
 
@@ -184,7 +178,6 @@
           photo: photoURL
         });
 
-        console.log("Piano added successfully!");
         clearInputs();
       } catch (err) {
         console.error("Error adding piano:", err);
