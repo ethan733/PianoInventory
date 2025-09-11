@@ -1,95 +1,83 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
   <title>Piano Inventory</title>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background: #f9f9f9;
-    }
-    h1 {
-      text-align: center;
-    }
-    .hidden {
-      display: none;
-    }
-    form {
-      margin-bottom: 20px;
-      background: #fff;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    label {
-      display: block;
-      margin-top: 10px;
-    }
-    input, select, textarea, button {
-      margin-top: 5px;
-      padding: 8px;
-      width: 100%;
-      max-width: 400px;
-    }
-    .logout-btn {
-      background: #d9534f;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      margin-bottom: 20px;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-    .logout-btn:hover {
-      background: #c9302c;
-    }
-    .piano-card {
-      background: #fff;
-      padding: 15px;
-      margin-bottom: 10px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .hidden { display: none; }
+    input, select, textarea { margin: 5px 0; padding: 6px; width: 250px; }
+    button { margin: 5px 0; padding: 6px 12px; cursor: pointer; border: none; border-radius: 4px; }
+    #loginSection, #piano-form { margin-bottom: 20px; }
+    #piano-list, #archive-list { margin-top: 20px; }
+    .piano-card { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 6px; background: #f9f9f9; }
+    .delete-btn { background-color: red; color: white; }
+    .add-btn { background-color: green; color: white; }
+    .sold-tag { background-color: blue; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+    .note-preview { white-space: pre-line; }
+    .toggle-notes { color: #007BFF; cursor: pointer; font-size: 12px; margin-left: 10px; }
   </style>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <h1>Piano Inventory</h1>
 
-  <!-- Login Form -->
-  <form id="login-form">
-    <h2>Login</h2>
-    <label>Email: <input type="email" id="login-email" required></label>
-    <label>Password: <input type="password" id="login-password" required></label>
-    <button type="button" id="login-button">Login</button>
-  </form>
+  <!-- Login Section -->
+  <div id="loginSection">
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+  </div>
+  <button id="logoutBtn" class="hidden">Logout</button>
 
-  <!-- Logout Button -->
-  <button id="logout-button" class="logout-btn hidden">Logout</button>
+  <!-- Toggle Form Button -->
+  <button id="toggleFormBtn" class="hidden">+ Add Piano</button>
 
   <!-- Add Piano Form -->
-  <form id="piano-form" class="hidden">
+  <div id="piano-form" class="hidden">
     <h2>Add Piano</h2>
-    <label>Serial: <input type="text" id="serial" required></label>
-    <label>Model: <input type="text" id="model"></label>
-    <label>Price: <input type="number" id="price"></label>
-    <label>Status:
-      <select id="status">
-        <option value="on floor">On Floor</option>
-        <option value="in storage">In Storage</option>
-        <option value="sold">Sold</option>
-        <option value="detailed">Detailed</option>
-        <option value="potential buyer">Potential Buyer</option>
-      </select>
-    </label>
-    <button type="submit">Add Piano</button>
-  </form>
+    <input type="text" id="brand" placeholder="Brand"><br>
+    <input type="text" id="model" placeholder="Model"><br>
+    <input type="text" id="modelYear" placeholder="Model Year"><br>
+    <input type="text" id="serial" placeholder="Serial Number"><br>
+    <input type="number" id="price" placeholder="Price"><br>
+    <input type="text" id="color" placeholder="Color"><br>
+    <input type="text" id="length" placeholder="Length"><br>
+    <select id="location">
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
+    </select><br>
+    <select id="playerSystem">
+      <option value="None">No Player System</option>
+      <option value="PianoDisc">PianoDisc</option>
+      <option value="Spirio">Steinway Spirio</option>
+      <option value="QRS">QRS</option>
+      <option value="Other">Other</option>
+    </select><br>
+    <select id="status">
+      <option value="On Floor">On Floor</option>
+      <option value="In Storage">In Storage</option>
+      <option value="Detailed">Detailed</option>
+      <option value="Potential Buyer">Potential Buyer</option>
+      <option value="Sold">Sold</option>
+    </select><br>
+    <textarea id="notes" placeholder="Notes" rows="3"></textarea><br>
+    <button id="addBtn" class="add-btn">Add Piano</button>
+  </div>
 
-  <!-- Inventory List -->
+  <!-- Active Inventory -->
+  <h2>Active Inventory</h2>
   <div id="piano-list"></div>
+
+  <!-- Archive -->
+  <button id="toggleArchiveBtn" class="hidden">+ Show Archive</button>
+  <div id="archive-section" class="hidden">
+    <h2>Archive (Sold Pianos)</h2>
+    <div id="archive-list"></div>
+  </div>
 
   <script>
     // Firebase Config
@@ -107,75 +95,157 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
 
-    const loginForm = document.getElementById('login-form');
-    const loginEmail = document.getElementById('login-email');
-    const loginPassword = document.getElementById('login-password');
-    const loginButton = document.getElementById('login-button');
-    const logoutButton = document.getElementById('logout-button');
-    const pianoForm = document.getElementById('piano-form');
-    const pianoList = document.getElementById('piano-list');
+    const loginSection = document.getElementById("loginSection");
+    const email = document.getElementById("email");
+    const password = document.getElementById("password");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const pianoForm = document.getElementById("piano-form");
+    const addBtn = document.getElementById("addBtn");
+    const pianoList = document.getElementById("piano-list");
+    const archiveList = document.getElementById("archive-list");
+    const toggleFormBtn = document.getElementById("toggleFormBtn");
+    const toggleArchiveBtn = document.getElementById("toggleArchiveBtn");
+    const archiveSection = document.getElementById("archive-section");
 
-    // Login with button
-    loginButton.addEventListener('click', () => {
-      const email = loginEmail.value;
-      const password = loginPassword.value;
-      auth.signInWithEmailAndPassword(email, password)
+    // Login
+    loginBtn.addEventListener("click", () => {
+      auth.signInWithEmailAndPassword(email.value, password.value)
         .catch(err => alert(err.message));
     });
 
-    // Login with Enter key
-    loginForm.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        loginButton.click();
-      }
+    // Enter key login
+    password.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") loginBtn.click();
     });
 
     // Logout
-    logoutButton.addEventListener('click', () => {
-      auth.signOut();
-    });
+    logoutBtn.addEventListener("click", () => auth.signOut());
 
-    // Auth state
+    // Auth State
     auth.onAuthStateChanged(user => {
       if (user) {
-        loginForm.classList.add('hidden');
-        logoutButton.classList.remove('hidden');
-        pianoForm.classList.remove('hidden');
-        loadPianos();
+        loginSection.classList.add("hidden");
+        logoutBtn.classList.remove("hidden");
+        toggleFormBtn.classList.remove("hidden");
+        toggleArchiveBtn.classList.remove("hidden");
+        pianoForm.classList.add("hidden");
+        archiveSection.classList.add("hidden");
+        loadInventory();
+        loadArchive();
       } else {
-        loginForm.classList.remove('hidden');
-        logoutButton.classList.add('hidden');
-        pianoForm.classList.add('hidden');
-        pianoList.innerHTML = '';
+        loginSection.classList.remove("hidden");
+        logoutBtn.classList.add("hidden");
+        toggleFormBtn.classList.add("hidden");
+        toggleArchiveBtn.classList.add("hidden");
+        pianoForm.classList.add("hidden");
+        pianoList.innerHTML = "";
+        archiveList.innerHTML = "";
       }
     });
 
-    // Add piano
-    pianoForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const piano = {
-        serial: document.getElementById('serial').value,
-        model: document.getElementById('model').value,
-        price: document.getElementById('price').value,
-        status: document.getElementById('status').value,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      db.collection('pianos').add(piano).then(() => {
-        pianoForm.reset();
+    // Toggle Add Piano Form
+    toggleFormBtn.addEventListener("click", () => {
+      pianoForm.classList.toggle("hidden");
+      toggleFormBtn.textContent = pianoForm.classList.contains("hidden")
+        ? "+ Add Piano"
+        : "– Hide Form";
+    });
+
+    // Toggle Archive Section
+    toggleArchiveBtn.addEventListener("click", () => {
+      archiveSection.classList.toggle("hidden");
+      toggleArchiveBtn.textContent = archiveSection.classList.contains("hidden")
+        ? "+ Show Archive"
+        : "– Hide Archive";
+    });
+
+    // Add Piano
+    addBtn.addEventListener("click", () => {
+      db.collection("pianos").add({
+        brand: document.getElementById("brand").value,
+        model: document.getElementById("model").value,
+        modelYear: document.getElementById("modelYear").value,
+        serial: document.getElementById("serial").value,
+        price: document.getElementById("price").value,
+        color: document.getElementById("color").value,
+        length: document.getElementById("length").value,
+        location: document.getElementById("location").value,
+        playerSystem: document.getElementById("playerSystem").value,
+        status: document.getElementById("status").value,
+        notes: document.getElementById("notes").value,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
     });
 
-    // Load pianos
-    function loadPianos() {
-      db.collection('pianos').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-        pianoList.innerHTML = '';
+    // Load Active Inventory
+    function loadInventory() {
+      db.collection("pianos").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+        pianoList.innerHTML = "";
         snapshot.forEach(doc => {
           const piano = doc.data();
-          const div = document.createElement('div');
-          div.classList.add('piano-card');
-          div.innerHTML = `<strong>${piano.serial || ''}</strong> - ${piano.model || ''} - $${piano.price || ''} <em>(${piano.status})</em>`;
+          const div = document.createElement("div");
+          div.className = "piano-card";
+          div.innerHTML = `
+            <strong>${piano.brand || ""} ${piano.model || ""} (${piano.modelYear || ""})</strong><br>
+            Serial: ${piano.serial || ""} <br>
+            Price: $${piano.price || ""} <br>
+            Color: ${piano.color || ""} | Length: ${piano.length || ""} <br>
+            Location: ${piano.location || ""} <br>
+            Player System: ${piano.playerSystem || "None"} <br>
+            Status: ${piano.status === "Sold" ? "<span class='sold-tag'>Sold</span>" : piano.status} <br>
+            Notes: <span class="note-preview">${(piano.notes || "").substring(0, 50)}</span>
+            ${(piano.notes && piano.notes.length > 50) ? `<span class="toggle-notes">[Show More]</span>` : ""}
+            <br>
+            <button class="delete-btn">Delete</button>
+          `;
+          const deleteBtn = div.querySelector(".delete-btn");
+          deleteBtn.addEventListener("click", () => {
+            if (piano.status === "Sold") {
+              db.collection("archive").add(piano).then(() => {
+                db.collection("pianos").doc(doc.id).delete();
+              });
+            } else {
+              db.collection("pianos").doc(doc.id).delete();
+            }
+          });
+          const toggleNotes = div.querySelector(".toggle-notes");
+          if (toggleNotes) {
+            toggleNotes.addEventListener("click", () => {
+              const preview = div.querySelector(".note-preview");
+              if (toggleNotes.textContent === "[Show More]") {
+                preview.textContent = piano.notes;
+                toggleNotes.textContent = "[Show Less]";
+              } else {
+                preview.textContent = piano.notes.substring(0, 50);
+                toggleNotes.textContent = "[Show More]";
+              }
+            });
+          }
           pianoList.appendChild(div);
+        });
+      });
+    }
+
+    // Load Archive
+    function loadArchive() {
+      db.collection("archive").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+        archiveList.innerHTML = "";
+        snapshot.forEach(doc => {
+          const piano = doc.data();
+          const div = document.createElement("div");
+          div.className = "piano-card";
+          div.innerHTML = `
+            <strong>${piano.brand || ""} ${piano.model || ""} (${piano.modelYear || ""})</strong><br>
+            Serial: ${piano.serial || ""} <br>
+            Price: $${piano.price || ""} <br>
+            Color: ${piano.color || ""} | Length: ${piano.length || ""} <br>
+            Location: ${piano.location || ""} <br>
+            Player System: ${piano.playerSystem || "None"} <br>
+            Status: <span class='sold-tag'>Sold</span> <br>
+            Notes: ${piano.notes || ""}
+          `;
+          archiveList.appendChild(div);
         });
       });
     }
