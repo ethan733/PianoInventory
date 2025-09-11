@@ -33,6 +33,30 @@
       width: 100%; padding: 10px; margin-bottom: 20px;
       border: 1px solid #ccc; border-radius: 6px;
     }
+    /* Drop area styling */
+    #dropArea {
+      border: 2px dashed #aaa;
+      border-radius: 6px;
+      padding: 15px;
+      text-align: center;
+      color: #666;
+      cursor: pointer;
+      flex: 1 1 100%;
+      margin: 5px;
+    }
+    #dropArea.dragover {
+      border-color: #007BFF;
+      background: #f0f8ff;
+      color: #007BFF;
+    }
+    #photoInput { display: none; }
+    #photoPreview {
+      max-width: 120px;
+      max-height: 100px;
+      margin: 5px;
+      border-radius: 6px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -56,8 +80,12 @@
         <option value="Detailed">Detailed</option>
         <option value="Potential Buyer">Potential Buyer</option>
       </select>
-      <!-- New photo upload -->
+
+      <!-- Photo upload (click or drag) -->
+      <div id="dropArea">Click or drag a photo here</div>
       <input type="file" id="photoInput" accept="image/*">
+      <img id="photoPreview" alt="Preview">
+      
       <button id="addBtn">Add Piano</button>
       <button id="updateBtn" style="display:none; background:green;">Update Piano</button>
     </div>
@@ -118,11 +146,14 @@
     const qtyInput = document.getElementById("qtyInput");
     const statusInput = document.getElementById("statusInput");
     const photoInput = document.getElementById("photoInput");
+    const dropArea = document.getElementById("dropArea");
+    const photoPreview = document.getElementById("photoPreview");
     const addBtn = document.getElementById("addBtn");
     const updateBtn = document.getElementById("updateBtn");
 
     let editId = null;
     let allPianos = [];
+    let droppedFile = null;
 
     // LOGIN
     async function doLogin() {
@@ -154,19 +185,176 @@
       }
     });
 
-    // INVENTORY
+    // DROP AREA EVENTS
+    dropArea.addEventListener("click", () => photoInput.click());
+    dropArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropArea.classList.add("dragover");
+    });
+    dropArea.addEventListener("dragleave", () => {
+      dropArea.classList.remove("dragover");
+    });
+    dropArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropArea.classList.remove("dragover");
+      if (e.dataTransfer.files.length > 0) {
+        droppedFile = e.dataTransfer.files[0];
+        previewPhoto(droppedFile);
+      }
+    });
+    photoInput.addEventListener("change", () => {
+      if (photoInput.files.length > 0) {
+        droppedFile = photoInput.files[0];
+        previewPhoto(droppedFile);
+      }
+    });
+
+    // PREVIEW FUNCTION
+    function previewPhoto(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        photoPreview.src = e.target.result;
+        photoPreview.style.display = "block";
+      };
+      reader.readAsDataURL(file);
+      dropArea.textContent = "Photo ready: " + file.name;
+    }
+
+    // UPLOAD PHOTO
     async function uploadPhoto(file) {
       const fileRef = ref(storage, 'piano_photos/' + Date.now() + '_' + file.name);
       await uploadBytes(fileRef, file);
       return await getDownloadURL(fileRef);
     }
 
+    // ADD PIANO
     async function addPiano() {
       if (!brandInput.value || !modelInput.value) return alert("Enter brand and model");
       let photoURL = "";
-      if (photoInput.files.length > 0) {
-        photoURL = await uploadPhoto(photoInput.files[0]);
+      if (droppedFile) {
+        photoURL = await uploadPhoto(droppedFile);
       }
       await addDoc(collection(db, "pianos"), {
         brand: brandInput.value,
         model: modelInput.value,
+        serial: serialInput.value,
+        price: priceInput.value,
+        quantity: qtyInput.value,
+        status: statusInput.value,
+        photo: photoURL
+      });
+      clearInputs();
+    }
+
+    // UPDATE PIANO
+    async function updatePiano() {
+      if (!editId) return;
+      const docRef = doc(db, "pianos", editId);
+      let photoURL = null;
+      if (droppedFile) {
+        photoURL = await uploadPhoto(droppedFile);
+      }
+      const updateData = {
+        brand: brandInput.value,
+        model: modelInput.value,
+        serial: serialInput.value,
+        price: priceInput.value,
+        quantity: qtyInput.value,
+        status: statusInput.value
+      };
+      if (photoURL) updateData.photo = photoURL;
+      await updateDoc(docRef, updateData);
+      clearInputs();
+      addBtn.style.display = "inline-block";
+      updateBtn.style.display = "none";
+      editId = null;
+    }
+
+    function clearInputs() {
+      brandInput.value = "";
+      modelInput.value = "";
+      serialInput.value = "";
+      priceInput.value = "";
+      qtyInput.value = "";
+      statusInput.value = "On Floor";
+      droppedFile = null;
+      photoInput.value = "";
+      dropArea.textContent = "Click or drag a photo here";
+      photoPreview.src = "";
+      photoPreview.style.display = "none";
+    }
+
+    addBtn.addEventListener("click", addPiano);
+    updateBtn.addEventListener("click", updatePiano);
+
+    // ENTER key for add/update
+    [brandInput, modelInput, serialInput, priceInput, qtyInput].forEach(input => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (editId) updatePiano(); else addPiano();
+        }
+      });
+    });
+
+    // REALTIME INVENTORY
+    onSnapshot(collection(db, "pianos"), (snapshot) => {
+      allPianos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderList(allPianos);
+    });
+
+    function renderList(pianos) {
+      inventoryList.innerHTML = "";
+      pianos.forEach(p => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div style="display:flex;align-items:center;">
+            ${p.photo ? `<a href="${p.photo}" target="_blank"><img src="${p.photo}" alt="Piano"></a>` : ""}
+            <div>
+              <strong>${p.brand}</strong> - ${p.model} 
+              | Serial: ${p.serial || "N/A"} 
+              | Price: $${p.price || "N/A"} 
+              | Qty: ${p.quantity || 0} 
+              | Status: ${p.status || "N/A"}
+            </div>
+          </div>
+          <div class="btn-group">
+            <button onclick="editPiano('${p.id}')">Edit</button>
+            <button onclick="deletePiano('${p.id}')" style="background:red;">Delete</button>
+          </div>
+        `;
+        inventoryList.appendChild(li);
+      });
+    }
+
+    // EDIT + DELETE
+    window.editPiano = (id) => {
+      const piano = allPianos.find(p => p.id === id);
+      if (!piano) return;
+      brandInput.value = piano.brand;
+      modelInput.value = piano.model;
+      serialInput.value = piano.serial;
+      priceInput.value = piano.price;
+      qtyInput.value = piano.quantity;
+      statusInput.value = piano.status;
+      editId = id;
+      addBtn.style.display = "none";
+      updateBtn.style.display = "inline-block";
+    };
+    window.deletePiano = async (id) => {
+      await deleteDoc(doc(db, "pianos", id));
+    };
+
+    // SEARCH
+    searchInput.addEventListener("input", (e) => {
+      const term = e.target.value.toLowerCase();
+      const filtered = allPianos.filter(p =>
+        (p.brand && p.brand.toLowerCase().includes(term)) ||
+        (p.model && p.model.toLowerCase().includes(term)) ||
+        (p.serial && p.serial.toLowerCase().includes(term))
+      );
+      renderList(filtered);
+    });
+  </script>
+</body>
+</html>
