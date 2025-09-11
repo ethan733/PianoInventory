@@ -23,6 +23,10 @@
       flex-wrap: wrap; padding: 8px; margin-bottom: 5px;
       background: #eee; border-radius: 4px;
     }
+    li img {
+      max-width: 100px; max-height: 80px; object-fit: cover;
+      border-radius: 5px; margin-right: 10px;
+    }
     .auth { margin-top: 20px; text-align: center; }
     .btn-group { display: flex; gap: 5px; }
     #searchInput {
@@ -38,7 +42,7 @@
     <!-- Search -->
     <input id="searchInput" type="text" placeholder="Search by brand, model, or serial...">
 
-    <!-- Controls (visible only when logged in) -->
+    <!-- Controls -->
     <div class="controls">
       <input id="brandInput" placeholder="Brand">
       <input id="modelInput" placeholder="Model">
@@ -52,6 +56,8 @@
         <option value="Detailed">Detailed</option>
         <option value="Potential Buyer">Potential Buyer</option>
       </select>
+      <!-- New photo upload -->
+      <input type="file" id="photoInput" accept="image/*">
       <button id="addBtn">Add Piano</button>
       <button id="updateBtn" style="display:none; background:green;">Update Piano</button>
     </div>
@@ -78,6 +84,8 @@
       from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
       from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
@@ -92,6 +100,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+    const storage = getStorage(app);
 
     const loginBtn = document.getElementById("loginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
@@ -108,13 +117,14 @@
     const priceInput = document.getElementById("priceInput");
     const qtyInput = document.getElementById("qtyInput");
     const statusInput = document.getElementById("statusInput");
+    const photoInput = document.getElementById("photoInput");
     const addBtn = document.getElementById("addBtn");
     const updateBtn = document.getElementById("updateBtn");
 
     let editId = null;
     let allPianos = [];
 
-    // LOGIN ---------------------
+    // LOGIN
     async function doLogin() {
       try {
         await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
@@ -128,7 +138,6 @@
         if (e.key === "Enter") doLogin();
       });
     });
-
     logoutBtn.addEventListener("click", async () => { await signOut(auth); });
 
     onAuthStateChanged(auth, (user) => {
@@ -145,119 +154,19 @@
       }
     });
 
-    // INVENTORY ---------------------
+    // INVENTORY
+    async function uploadPhoto(file) {
+      const fileRef = ref(storage, 'piano_photos/' + Date.now() + '_' + file.name);
+      await uploadBytes(fileRef, file);
+      return await getDownloadURL(fileRef);
+    }
+
     async function addPiano() {
       if (!brandInput.value || !modelInput.value) return alert("Enter brand and model");
+      let photoURL = "";
+      if (photoInput.files.length > 0) {
+        photoURL = await uploadPhoto(photoInput.files[0]);
+      }
       await addDoc(collection(db, "pianos"), {
         brand: brandInput.value,
         model: modelInput.value,
-        serial: serialInput.value,
-        price: priceInput.value,
-        quantity: qtyInput.value,
-        status: statusInput.value
-      });
-      clearInputs();
-    }
-
-    async function updatePiano() {
-      if (!editId) return;
-      const docRef = doc(db, "pianos", editId);
-      await updateDoc(docRef, {
-        brand: brandInput.value,
-        model: modelInput.value,
-        serial: serialInput.value,
-        price: priceInput.value,
-        quantity: qtyInput.value,
-        status: statusInput.value
-      });
-      clearInputs();
-      addBtn.style.display = "inline-block";
-      updateBtn.style.display = "none";
-      editId = null;
-    }
-
-    function clearInputs() {
-      brandInput.value = "";
-      modelInput.value = "";
-      serialInput.value = "";
-      priceInput.value = "";
-      qtyInput.value = "";
-      statusInput.value = "On Floor";
-    }
-
-    addBtn.addEventListener("click", addPiano);
-    updateBtn.addEventListener("click", updatePiano);
-
-    // ENTER key in form fields → add or update
-    [brandInput, modelInput, serialInput, priceInput, qtyInput].forEach(input => {
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (editId) {
-            updatePiano();
-          } else {
-            addPiano();
-          }
-        }
-      });
-    });
-
-    // REALTIME INVENTORY RENDER
-    onSnapshot(collection(db, "pianos"), (snapshot) => {
-      allPianos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderList(allPianos);
-    });
-
-    function renderList(pianos) {
-      inventoryList.innerHTML = "";
-      pianos.forEach(p => {
-        const li = document.createElement("li");
-        li.innerHTML = `
-          <div>
-            <strong>${p.brand}</strong> - ${p.model} 
-            | Serial: ${p.serial || "N/A"} 
-            | Price: $${p.price || "N/A"} 
-            | Qty: ${p.quantity || 0} 
-            | Status: ${p.status || "N/A"}
-          </div>
-          <div class="btn-group">
-            <button onclick="editPiano('${p.id}')">Edit</button>
-            <button onclick="deletePiano('${p.id}')" style="background:red;">Delete</button>
-          </div>
-        `;
-        inventoryList.appendChild(li);
-      });
-    }
-
-    // EDIT + DELETE
-    window.editPiano = (id) => {
-      const piano = allPianos.find(p => p.id === id);
-      if (!piano) return;
-      brandInput.value = piano.brand;
-      modelInput.value = piano.model;
-      serialInput.value = piano.serial;
-      priceInput.value = piano.price;
-      qtyInput.value = piano.quantity;
-      statusInput.value = piano.status;
-      editId = id;
-      addBtn.style.display = "none";
-      updateBtn.style.display = "inline-block";
-    };
-
-    window.deletePiano = async (id) => {
-      await deleteDoc(doc(db, "pianos", id));
-    };
-
-    // SEARCH FILTER
-    searchInput.addEventListener("input", (e) => {
-      const term = e.target.value.toLowerCase();
-      const filtered = allPianos.filter(p =>
-        (p.brand && p.brand.toLowerCase().includes(term)) ||
-        (p.model && p.model.toLowerCase().includes(term)) ||
-        (p.serial && p.serial.toLowerCase().includes(term))
-      );
-      renderList(filtered);
-    });
-  </script>
-</body>
-</html>
