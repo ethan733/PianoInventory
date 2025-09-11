@@ -4,43 +4,48 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Piano Inventory</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #login-section, #inventory-section { margin-bottom: 20px; }
+    input, select, button { margin: 5px; padding: 8px; }
+    .piano-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+  </style>
 </head>
 <body>
   <h1>Piano Inventory</h1>
 
-  <!-- Login UI -->
-  <div id="login-container">
+  <!-- Login Section -->
+  <div id="login-section">
     <input type="email" id="email" placeholder="Email" />
     <input type="password" id="password" placeholder="Password" />
     <button id="login-btn">Login</button>
+    <button id="logout-btn" style="display:none;">Logout</button>
   </div>
-  <button id="logout-btn" style="display:none;">Logout</button>
 
-  <!-- Inventory Form -->
-  <div id="inventory-form" style="display:none;">
+  <!-- Inventory Section -->
+  <div id="inventory-section" style="display:none;">
+    <h2>Add Piano</h2>
     <input type="text" id="brand" placeholder="Brand" />
     <input type="text" id="model" placeholder="Model" />
-    <input type="text" id="serial" placeholder="Serial" />
+    <input type="text" id="serial" placeholder="Serial Number" />
     <input type="number" id="price" placeholder="Price" />
     <select id="status">
-      <option value="on floor">On Floor</option>
-      <option value="in storage">In Storage</option>
-      <option value="sold">Sold</option>
-      <option value="detailed">Detailed</option>
-      <option value="potential buyer">Potential Buyer</option>
+      <option value="On Floor">On Floor</option>
+      <option value="In Storage">In Storage</option>
+      <option value="Sold">Sold</option>
+      <option value="Detailed">Detailed</option>
+      <option value="Potential Buyer">Potential Buyer</option>
     </select>
-    <input type="file" id="photo" />
     <button id="add-btn">Add Piano</button>
+
+    <h2>Inventory List</h2>
+    <div id="inventory-list"></div>
   </div>
 
-  <!-- Inventory List -->
-  <ul id="inventory-list"></ul>
-
-  <!-- Firebase SDKs (Compat Versions) -->
+  <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage-compat.js"></script>
 
   <script>
     // Your Firebase config
@@ -54,84 +59,96 @@
       measurementId: "G-1XQLEV28JZ"
     };
 
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
-    const storage = firebase.storage();
 
-    // DOM elements
-    const loginContainer = document.getElementById("login-container");
-    const logoutBtn = document.getElementById("logout-btn");
-    const inventoryForm = document.getElementById("inventory-form");
-    const addBtn = document.getElementById("add-btn");
-    const inventoryList = document.getElementById("inventory-list");
+    // Elements
+    const loginSection = document.getElementById('login-section');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const inventorySection = document.getElementById('inventory-section');
+    const addBtn = document.getElementById('add-btn');
+    const inventoryList = document.getElementById('inventory-list');
 
-    // Login
-    document.getElementById("login-btn").addEventListener("click", () => {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-          loginContainer.style.display = "none";
-          logoutBtn.style.display = "block";
-          inventoryForm.style.display = "block";
-        })
+    // Login with Enter key
+    passwordInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") loginBtn.click();
+    });
+
+    // Auth
+    loginBtn.onclick = () => {
+      auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value)
         .catch(err => alert(err.message));
-    });
+    };
 
-    // Logout
-    logoutBtn.addEventListener("click", () => {
-      auth.signOut().then(() => {
-        loginContainer.style.display = "block";
+    logoutBtn.onclick = () => auth.signOut();
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        emailInput.style.display = "none";
+        passwordInput.style.display = "none";
+        loginBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+        inventorySection.style.display = "block";
+        loadInventory();
+      } else {
+        emailInput.style.display = "inline-block";
+        passwordInput.style.display = "inline-block";
+        loginBtn.style.display = "inline-block";
         logoutBtn.style.display = "none";
-        inventoryForm.style.display = "none";
-      });
+        inventorySection.style.display = "none";
+      }
     });
 
-    // Add Piano
-    addBtn.addEventListener("click", async () => {
-      const brand = document.getElementById("brand").value;
-      const model = document.getElementById("model").value;
-      const serial = document.getElementById("serial").value;
-      const price = document.getElementById("price").value;
-      const status = document.getElementById("status").value;
-      const file = document.getElementById("photo").files[0];
+    // Add piano
+    addBtn.onclick = async () => {
+      const brand = document.getElementById('brand').value;
+      const model = document.getElementById('model').value;
+      const serial = document.getElementById('serial').value;
+      const price = document.getElementById('price').value;
+      const status = document.getElementById('status').value;
 
-      let photoURL = "";
-      if (file) {
-        const storageRef = storage.ref("piano_photos/" + Date.now() + "_" + file.name);
-        await storageRef.put(file);
-        photoURL = await storageRef.getDownloadURL();
+      if (!brand || !model || !serial || !price) {
+        alert("Please fill out all fields.");
+        return;
       }
 
-      await db.collection("inventory").add({
-        brand, model, serial, price, status, photoURL,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      await db.collection("pianos").add({ brand, model, serial, price, status });
+      document.getElementById('brand').value = '';
+      document.getElementById('model').value = '';
+      document.getElementById('serial').value = '';
+      document.getElementById('price').value = '';
+      document.getElementById('status').value = 'On Floor';
+    };
 
-      document.getElementById("brand").value = "";
-      document.getElementById("model").value = "";
-      document.getElementById("serial").value = "";
-      document.getElementById("price").value = "";
-      document.getElementById("status").value = "on floor";
-      document.getElementById("photo").value = "";
-    });
-
-    // Realtime inventory updates
-    db.collection("inventory").orderBy("createdAt", "desc").onSnapshot(snapshot => {
-      inventoryList.innerHTML = "";
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const li = document.createElement("li");
-        li.innerHTML = `
-          <strong>${data.brand} ${data.model}</strong> 
-          (Serial: ${data.serial}, Price: $${data.price}, Status: ${data.status})
-          ${data.photoURL ? `<br><img src="${data.photoURL}" width="100"/>` : ""}
-        `;
-        inventoryList.appendChild(li);
+    // Load inventory live
+    function loadInventory() {
+      db.collection("pianos").onSnapshot(snapshot => {
+        inventoryList.innerHTML = '';
+        snapshot.forEach(doc => {
+          const piano = doc.data();
+          const div = document.createElement('div');
+          div.className = 'piano-item';
+          div.innerHTML = `
+            <strong>${piano.brand} ${piano.model}</strong><br/>
+            Serial: ${piano.serial}<br/>
+            Price: $${piano.price}<br/>
+            Status: ${piano.status}<br/>
+            <button onclick="deletePiano('${doc.id}')">Delete</button>
+          `;
+          inventoryList.appendChild(div);
+        });
       });
-    });
+    }
+
+    // Delete piano
+    async function deletePiano(id) {
+      await db.collection("pianos").doc(id).delete();
+    }
+    window.deletePiano = deletePiano;
   </script>
 </body>
 </html>
