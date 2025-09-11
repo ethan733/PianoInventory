@@ -1,308 +1,202 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Piano Inventory</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
-    h1, h2 { text-align: center; }
-    .container {
-      max-width: 900px; margin: auto; background: #fff; padding: 20px;
-      border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    .controls { display: none; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-    input, select { padding: 8px; margin: 5px; }
-    button {
-      padding: 8px 12px; cursor: pointer; border: none; border-radius: 5px;
-      background: #007BFF; color: white;
-    }
-    button:hover { background: #0056b3; }
-    ul { list-style: none; padding: 0; }
-    li {
-      display: flex; justify-content: space-between; align-items: center;
-      flex-wrap: wrap; padding: 8px; margin-bottom: 5px;
-      background: #eee; border-radius: 4px;
-    }
-    li img {
-      max-width: 100px; max-height: 80px; object-fit: cover;
-      border-radius: 5px; margin-right: 10px;
-    }
-    .auth { margin-top: 20px; text-align: center; }
-    .btn-group { display: flex; gap: 5px; }
-    #searchInput {
-      width: 100%; padding: 10px; margin-bottom: 20px;
-      border: 1px solid #ccc; border-radius: 6px;
-    }
-    /* Drop area styling */
-    #dropArea {
-      border: 2px dashed #aaa;
-      border-radius: 6px;
-      padding: 15px;
-      text-align: center;
-      color: #666;
-      cursor: pointer;
-      flex: 1 1 100%;
-      margin: 5px;
-    }
-    #dropArea.dragover {
-      border-color: #007BFF;
-      background: #f0f8ff;
-      color: #007BFF;
-    }
-    #photoInput { display: none; }
-    #photoPreview {
-      max-width: 120px;
-      max-height: 100px;
-      margin: 5px;
-      border-radius: 6px;
-      display: none;
-    }
+    body { font-family: Arial, sans-serif; margin:20px; }
+    h1 { color:#333; }
+    input, select, button { margin:5px; padding:8px; }
+    ul { list-style:none; padding:0; }
+    li { margin:10px 0; padding:10px; border:1px solid #ccc; border-radius:6px; display:flex; justify-content:space-between; align-items:center; }
+    .btn-group button { margin-left:5px; }
+    .auth { margin-bottom:20px; }
+    img { max-width:80px; max-height:80px; margin-right:10px; border-radius:4px; }
+    #dropZone { border:2px dashed #aaa; padding:10px; margin:5px 0; cursor:pointer; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Piano Inventory</h1>
+  <h1>Piano Inventory</h1>
 
-    <!-- Search -->
-    <input id="searchInput" type="text" placeholder="Search by brand, model, or serial...">
-
-    <!-- Controls -->
-    <div class="controls">
-      <input id="brandInput" placeholder="Brand">
-      <input id="modelInput" placeholder="Model">
-      <input id="serialInput" placeholder="Serial #">
-      <input id="priceInput" type="number" placeholder="Price">
-      <input id="qtyInput" type="number" placeholder="Quantity">
-      <select id="statusInput">
-        <option value="On Floor">On Floor</option>
-        <option value="In Storage">In Storage</option>
-        <option value="Sold">Sold</option>
-        <option value="Detailed">Detailed</option>
-        <option value="Potential Buyer">Potential Buyer</option>
-      </select>
-
-      <!-- Photo upload (click or drag) -->
-      <div id="dropArea">Click or drag a photo here</div>
-      <input type="file" id="photoInput" accept="image/*">
-      <img id="photoPreview" alt="Preview">
-      
-      <button id="addBtn">Add Piano</button>
-      <button id="updateBtn" style="display:none; background:green;">Update Piano</button>
+  <!-- Auth -->
+  <div class="auth">
+    <h2 id="authHeader">Admin Login</h2>
+    <div id="loginForm">
+      <input id="email" placeholder="Email">
+      <input id="password" type="password" placeholder="Password">
+      <button id="loginBtn">Login</button>
     </div>
-
-    <!-- Inventory List -->
-    <ul id="inventory"></ul>
-
-    <!-- Auth -->
-    <div class="auth">
-      <h2 id="loginHeader">Admin Login</h2>
-      <div id="loginForm">
-        <input id="email" placeholder="Email">
-        <input id="password" type="password" placeholder="Password">
-        <button id="loginBtn">Login</button>
-      </div>
-      <button id="logoutBtn" style="display:none;">Logout</button>
-    </div>
+    <button id="logoutBtn" style="display:none;">Logout</button>
   </div>
 
-  <!-- Firebase -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } 
-      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
-      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL } 
-      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
+  <!-- Controls (only visible when logged in) -->
+  <div id="controls" style="display:none;">
+    <input id="brand" placeholder="Brand">
+    <input id="model" placeholder="Model">
+    <input id="serial" placeholder="Serial">
+    <input id="price" placeholder="Price">
+    <input id="qty" type="number" placeholder="Quantity" value="1" min="1">
+    <select id="status">
+      <option>On Floor</option>
+      <option>In Storage</option>
+      <option>Sold</option>
+      <option>Detailed</option>
+      <option>Potential Buyer</option>
+    </select>
+    <div id="dropZone">Drag & drop photo here, or click to select</div>
+    <input type="file" id="photoInput" accept="image/*" style="display:none;">
+    <button id="addBtn">Add Piano</button>
+  </div>
 
+  <!-- Inventory List -->
+  <h2>Current Inventory</h2>
+  <ul id="inventoryList"></ul>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
+
+    // ✅ Your Firebase config (fixed bucket)
     const firebaseConfig = {
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
       authDomain: "pianoinv.firebaseapp.com",
       projectId: "pianoinv",
-      storageBucket: "pianoinv.firebasestorage.app",
+      storageBucket: "pianoinv.appspot.com",   // ✅ FIXED
       messagingSenderId: "651707888262",
       appId: "1:651707888262:web:23131a782e31a7bb511707",
       measurementId: "G-1XQLEV28JZ"
     };
 
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
     const auth = getAuth(app);
+    const db = getFirestore(app);
     const storage = getStorage(app);
 
+    const loginForm = document.getElementById("loginForm");
     const loginBtn = document.getElementById("loginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
-    const emailInput = document.getElementById("email");
-    const passwordInput = document.getElementById("password");
-    const loginForm = document.getElementById("loginForm");
-    const loginHeader = document.getElementById("loginHeader");
-    const controlsDiv = document.querySelector(".controls");
-    const inventoryList = document.getElementById("inventory");
-    const searchInput = document.getElementById("searchInput");
-    const brandInput = document.getElementById("brandInput");
-    const modelInput = document.getElementById("modelInput");
-    const serialInput = document.getElementById("serialInput");
-    const priceInput = document.getElementById("priceInput");
-    const qtyInput = document.getElementById("qtyInput");
-    const statusInput = document.getElementById("statusInput");
-    const photoInput = document.getElementById("photoInput");
-    const dropArea = document.getElementById("dropArea");
-    const photoPreview = document.getElementById("photoPreview");
+    const controlsDiv = document.getElementById("controls");
     const addBtn = document.getElementById("addBtn");
-    const updateBtn = document.getElementById("updateBtn");
+    const inventoryList = document.getElementById("inventoryList");
 
-    let editId = null;
-    let allPianos = [];
+    const brandInput = document.getElementById("brand");
+    const modelInput = document.getElementById("model");
+    const serialInput = document.getElementById("serial");
+    const priceInput = document.getElementById("price");
+    const qtyInput = document.getElementById("qty");
+    const statusInput = document.getElementById("status");
+
     let droppedFile = null;
 
-    // LOGIN
-    async function doLogin() {
+    // --- Auth ---
+    loginBtn.addEventListener("click", async () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
       try {
-        await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+        await signInWithEmailAndPassword(auth, email, password);
       } catch (err) {
-        alert("Login failed: " + err.message);
+        alert(err.message);
       }
-    }
-    loginBtn.addEventListener("click", doLogin);
-    [emailInput, passwordInput].forEach(input => {
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") doLogin();
-      });
     });
-    logoutBtn.addEventListener("click", async () => { await signOut(auth); });
+
+    document.getElementById("password").addEventListener("keypress", (e) => {
+      if (e.key === "Enter") loginBtn.click();
+    });
+
+    logoutBtn.addEventListener("click", () => signOut(auth));
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
         loginForm.style.display = "none";
-        loginHeader.style.display = "none";
         logoutBtn.style.display = "inline-block";
         controlsDiv.style.display = "flex";
       } else {
         loginForm.style.display = "block";
-        loginHeader.style.display = "block";
         logoutBtn.style.display = "none";
         controlsDiv.style.display = "none";
       }
     });
 
-    // DROP AREA EVENTS
-    dropArea.addEventListener("click", () => photoInput.click());
-    dropArea.addEventListener("dragover", (e) => {
+    // --- File Upload Handling ---
+    const dropZone = document.getElementById("dropZone");
+    const photoInput = document.getElementById("photoInput");
+
+    dropZone.addEventListener("click", () => photoInput.click());
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.style.borderColor = "blue"; });
+    dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "#aaa"; });
+    dropZone.addEventListener("drop", (e) => {
       e.preventDefault();
-      dropArea.classList.add("dragover");
-    });
-    dropArea.addEventListener("dragleave", () => {
-      dropArea.classList.remove("dragover");
-    });
-    dropArea.addEventListener("drop", (e) => {
-      e.preventDefault();
-      dropArea.classList.remove("dragover");
-      if (e.dataTransfer.files.length > 0) {
-        droppedFile = e.dataTransfer.files[0];
-        previewPhoto(droppedFile);
-      }
-    });
-    photoInput.addEventListener("change", () => {
-      if (photoInput.files.length > 0) {
-        droppedFile = photoInput.files[0];
-        previewPhoto(droppedFile);
-      }
+      droppedFile = e.dataTransfer.files[0];
+      dropZone.textContent = "Selected: " + droppedFile.name;
+      dropZone.style.borderColor = "green";
     });
 
-    // PREVIEW FUNCTION
-    function previewPhoto(file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        photoPreview.src = e.target.result;
-        photoPreview.style.display = "block";
-      };
-      reader.readAsDataURL(file);
-      dropArea.textContent = "Photo ready: " + file.name;
-    }
+    photoInput.addEventListener("change", (e) => {
+      droppedFile = e.target.files[0];
+      dropZone.textContent = "Selected: " + droppedFile.name;
+      dropZone.style.borderColor = "green";
+    });
 
-    // UPLOAD PHOTO
     async function uploadPhoto(file) {
       const fileRef = ref(storage, 'piano_photos/' + Date.now() + '_' + file.name);
       await uploadBytes(fileRef, file);
       return await getDownloadURL(fileRef);
     }
 
-    // ADD PIANO
+    // --- Add Piano ---
     async function addPiano() {
-      if (!brandInput.value || !modelInput.value) return alert("Enter brand and model");
-      let photoURL = "";
-      if (droppedFile) {
-        photoURL = await uploadPhoto(droppedFile);
+      console.log("Add button clicked");
+      if (!brandInput.value || !modelInput.value) {
+        alert("Enter brand and model");
+        return;
       }
-      await addDoc(collection(db, "pianos"), {
-        brand: brandInput.value,
-        model: modelInput.value,
-        serial: serialInput.value,
-        price: priceInput.value,
-        quantity: qtyInput.value,
-        status: statusInput.value,
-        photo: photoURL
-      });
-      clearInputs();
+
+      try {
+        let photoURL = "";
+        if (droppedFile) {
+          console.log("Uploading photo:", droppedFile.name);
+          photoURL = await uploadPhoto(droppedFile);
+        }
+
+        await addDoc(collection(db, "pianos"), {
+          brand: brandInput.value,
+          model: modelInput.value,
+          serial: serialInput.value,
+          price: priceInput.value,
+          quantity: qtyInput.value,
+          status: statusInput.value,
+          photo: photoURL
+        });
+
+        console.log("Piano added successfully!");
+        clearInputs();
+      } catch (err) {
+        console.error("Error adding piano:", err);
+        alert("Error: " + err.message);
+      }
     }
 
-    // UPDATE PIANO
-    async function updatePiano() {
-      if (!editId) return;
-      const docRef = doc(db, "pianos", editId);
-      let photoURL = null;
-      if (droppedFile) {
-        photoURL = await uploadPhoto(droppedFile);
-      }
-      const updateData = {
-        brand: brandInput.value,
-        model: modelInput.value,
-        serial: serialInput.value,
-        price: priceInput.value,
-        quantity: qtyInput.value,
-        status: statusInput.value
-      };
-      if (photoURL) updateData.photo = photoURL;
-      await updateDoc(docRef, updateData);
-      clearInputs();
-      addBtn.style.display = "inline-block";
-      updateBtn.style.display = "none";
-      editId = null;
-    }
+    addBtn.addEventListener("click", addPiano);
 
     function clearInputs() {
       brandInput.value = "";
       modelInput.value = "";
       serialInput.value = "";
       priceInput.value = "";
-      qtyInput.value = "";
+      qtyInput.value = "1";
       statusInput.value = "On Floor";
       droppedFile = null;
-      photoInput.value = "";
-      dropArea.textContent = "Click or drag a photo here";
-      photoPreview.src = "";
-      photoPreview.style.display = "none";
+      dropZone.textContent = "Drag & drop photo here, or click to select";
+      dropZone.style.borderColor = "#aaa";
     }
 
-    addBtn.addEventListener("click", addPiano);
-    updateBtn.addEventListener("click", updatePiano);
-
-    // ENTER key for add/update
-    [brandInput, modelInput, serialInput, priceInput, qtyInput].forEach(input => {
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (editId) updatePiano(); else addPiano();
-        }
-      });
-    });
-
-    // REALTIME INVENTORY
-    onSnapshot(collection(db, "pianos"), (snapshot) => {
-      allPianos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      renderList(allPianos);
-    });
-
+    // --- Render List ---
     function renderList(pianos) {
       inventoryList.innerHTML = "";
       pianos.forEach(p => {
@@ -319,7 +213,6 @@
             </div>
           </div>
           <div class="btn-group">
-            <button onclick="editPiano('${p.id}')">Edit</button>
             <button onclick="deletePiano('${p.id}')" style="background:red;">Delete</button>
           </div>
         `;
@@ -327,34 +220,16 @@
       });
     }
 
-    // EDIT + DELETE
-    window.editPiano = (id) => {
-      const piano = allPianos.find(p => p.id === id);
-      if (!piano) return;
-      brandInput.value = piano.brand;
-      modelInput.value = piano.model;
-      serialInput.value = piano.serial;
-      priceInput.value = piano.price;
-      qtyInput.value = piano.quantity;
-      statusInput.value = piano.status;
-      editId = id;
-      addBtn.style.display = "none";
-      updateBtn.style.display = "inline-block";
-    };
+    // --- Real-time Sync ---
+    onSnapshot(collection(db, "pianos"), (snapshot) => {
+      const pianos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderList(pianos);
+    });
+
+    // --- Delete Piano ---
     window.deletePiano = async (id) => {
       await deleteDoc(doc(db, "pianos", id));
     };
-
-    // SEARCH
-    searchInput.addEventListener("input", (e) => {
-      const term = e.target.value.toLowerCase();
-      const filtered = allPianos.filter(p =>
-        (p.brand && p.brand.toLowerCase().includes(term)) ||
-        (p.model && p.model.toLowerCase().includes(term)) ||
-        (p.serial && p.serial.toLowerCase().includes(term))
-      );
-      renderList(filtered);
-    });
   </script>
 </body>
 </html>
