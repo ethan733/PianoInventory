@@ -59,15 +59,15 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
 
-    // ✅ Your Firebase config (fixed bucket)
+    // ✅ Your Firebase config with correct bucket
     const firebaseConfig = {
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
       authDomain: "pianoinv.firebaseapp.com",
       projectId: "pianoinv",
-      storageBucket: "pianoinv.appspot.com",   // ✅ FIXED
+      storageBucket: "pianoinv.firebasestorage.app",   // ✅ Fixed to your real bucket
       messagingSenderId: "651707888262",
       appId: "1:651707888262:web:23131a782e31a7bb511707",
       measurementId: "G-1XQLEV28JZ"
@@ -144,9 +144,19 @@
     });
 
     async function uploadPhoto(file) {
-      const fileRef = ref(storage, 'piano_photos/' + Date.now() + '_' + file.name);
-      await uploadBytes(fileRef, file);
-      return await getDownloadURL(fileRef);
+      try {
+        console.log("Starting upload to Storage...");
+        const fileRef = ref(storage, 'piano_photos/' + Date.now() + '_' + file.name);
+        const snapshot = await uploadBytes(fileRef, file);
+        console.log("Upload complete:", snapshot.metadata.fullPath);
+        const url = await getDownloadURL(fileRef);
+        console.log("Download URL:", url);
+        return url;
+      } catch (err) {
+        console.error("Upload error:", err);
+        alert("Upload error: " + err.message);
+        return "";
+      }
     }
 
     // --- Add Piano ---
