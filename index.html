@@ -13,7 +13,7 @@
       text-align: center;
     }
     .container {
-      max-width: 800px;
+      max-width: 900px;
       margin: auto;
       background: #fff;
       padding: 20px;
@@ -22,10 +22,11 @@
     }
     .controls {
       display: none; /* hidden until login */
+      flex-wrap: wrap;
       gap: 10px;
       margin-bottom: 20px;
     }
-    input {
+    input, select {
       padding: 8px;
       margin: 5px;
     }
@@ -48,6 +49,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
       padding: 8px;
       margin-bottom: 5px;
       background: #eee;
@@ -67,7 +69,16 @@
     <div class="controls">
       <input id="brandInput" placeholder="Brand">
       <input id="modelInput" placeholder="Model">
+      <input id="serialInput" placeholder="Serial #">
+      <input id="priceInput" type="number" placeholder="Price">
       <input id="qtyInput" type="number" placeholder="Quantity">
+      <select id="statusInput">
+        <option value="On Floor">On Floor</option>
+        <option value="In Storage">In Storage</option>
+        <option value="Sold">Sold</option>
+        <option value="Detailed">Detailed</option>
+        <option value="Potential Buyer">Potential Buyer</option>
+      </select>
       <button id="addBtn">Add Piano</button>
     </div>
 
@@ -113,7 +124,10 @@
     const inventoryList = document.getElementById("inventory");
     const brandInput = document.getElementById("brandInput");
     const modelInput = document.getElementById("modelInput");
+    const serialInput = document.getElementById("serialInput");
+    const priceInput = document.getElementById("priceInput");
     const qtyInput = document.getElementById("qtyInput");
+    const statusInput = document.getElementById("statusInput");
     const addBtn = document.getElementById("addBtn");
     const loginBtn = document.getElementById("loginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
@@ -127,7 +141,7 @@
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         const li = document.createElement("li");
-        li.textContent = `${data.brand} - ${data.model} (Qty: ${data.quantity})`;
+        li.textContent = `${data.brand} - ${data.model} | Serial: ${data.serial} | Price: $${data.price} | Qty: ${data.quantity} | Status: ${data.status}`;
 
         // Delete button (only when logged in)
         if (auth.currentUser) {
@@ -149,19 +163,31 @@
         alert("You must be logged in!");
         return;
       }
+
       const brand = brandInput.value.trim();
       const model = modelInput.value.trim();
+      const serial = serialInput.value.trim();
+      const price = parseFloat(priceInput.value);
       const qty = parseInt(qtyInput.value);
+      const status = statusInput.value;
 
-      if (brand && model && qty > 0) {
+      if (brand && model && serial && !isNaN(price) && qty > 0) {
         await addDoc(collection(db, "pianos"), {
           brand,
           model,
-          quantity: qty
+          serial,
+          price,
+          quantity: qty,
+          status
         });
+
+        // Clear inputs
         brandInput.value = "";
         modelInput.value = "";
+        serialInput.value = "";
+        priceInput.value = "";
         qtyInput.value = "";
+        statusInput.value = "On Floor";
       } else {
         alert("Please fill all fields correctly.");
       }
