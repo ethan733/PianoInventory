@@ -29,6 +29,12 @@
     <input type="text" id="model" placeholder="Model" />
     <input type="text" id="serial" placeholder="Serial Number" />
     <input type="number" id="price" placeholder="Price" />
+    <input type="text" id="color" placeholder="Color" />
+    <input type="text" id="length" placeholder="Length (e.g. 6'1)" />
+    <select id="location">
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
+    </select>
     <select id="status">
       <option value="On Floor">On Floor</option>
       <option value="In Storage">In Storage</option>
@@ -64,7 +70,6 @@
     const db = firebase.firestore();
 
     // Elements
-    const loginSection = document.getElementById('login-section');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     const loginBtn = document.getElementById('login-btn');
@@ -109,18 +114,28 @@
       const model = document.getElementById('model').value;
       const serial = document.getElementById('serial').value;
       const price = document.getElementById('price').value;
+      const color = document.getElementById('color').value;
+      const length = document.getElementById('length').value;
+      const location = document.getElementById('location').value;
       const status = document.getElementById('status').value;
 
       if (!brand || !model || !serial || !price) {
-        alert("Please fill out all fields.");
+        alert("Please fill out all required fields.");
         return;
       }
 
-      await db.collection("pianos").add({ brand, model, serial, price, status });
+      await db.collection("pianos").add({ 
+        brand, model, serial, price, color, length, location, status 
+      });
+
+      // Reset inputs
       document.getElementById('brand').value = '';
       document.getElementById('model').value = '';
       document.getElementById('serial').value = '';
       document.getElementById('price').value = '';
+      document.getElementById('color').value = '';
+      document.getElementById('length').value = '';
+      document.getElementById('location').value = 'Gallery';
       document.getElementById('status').value = 'On Floor';
     };
 
@@ -136,6 +151,9 @@
             <strong>${piano.brand} ${piano.model}</strong><br/>
             Serial: ${piano.serial}<br/>
             Price: $${piano.price}<br/>
+            Color: ${piano.color || "N/A"}<br/>
+            Length: ${piano.length || "N/A"}<br/>
+            Location: ${piano.location || "N/A"}<br/>
             Status: ${piano.status}<br/>
             <button onclick="deletePiano('${doc.id}')">Delete</button>
           `;
