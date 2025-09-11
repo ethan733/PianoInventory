@@ -14,7 +14,6 @@
     .delete-btn { background-color: red; color: white; }
     .add-btn { background-color: green; color: white; }
     .sold-btn { background-color: blue; color: white; }
-    .restore-btn { background-color: orange; color: white; }
     .sold-tag { background-color: blue; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
     .note-preview { white-space: pre-line; }
     .toggle-notes { color: #007BFF; cursor: pointer; font-size: 12px; margin-left: 10px; }
@@ -201,7 +200,7 @@
             ${(piano.notes && piano.notes.length > 50) ? `<span class="toggle-notes">[Show More]</span>` : ""}
             <br>
             <button class="delete-btn">Delete</button>
-            ${piano.status !== "Sold" ? `<button class="sold-btn">Mark as Sold</button>` : ""}
+            <button class="sold-btn">Mark as Sold</button>
           `;
           // Delete with confirmation
           div.querySelector(".delete-btn").addEventListener("click", () => {
@@ -210,14 +209,9 @@
             }
           });
           // Mark as Sold
-          const soldBtn = div.querySelector(".sold-btn");
-          if (soldBtn) {
-            soldBtn.addEventListener("click", () => {
-              db.collection("pianos").doc(doc.id).update({ status: "Sold" }).then(() => {
-                soldBtn.remove();
-              });
-            });
-          }
+          div.querySelector(".sold-btn").addEventListener("click", () => {
+            db.collection("pianos").doc(doc.id).update({ status: "Sold" });
+          });
           // Notes toggle
           const toggleNotes = div.querySelector(".toggle-notes");
           if (toggleNotes) {
@@ -237,7 +231,7 @@
       });
     }
 
-    // Load Archive (Sold pianos)
+    // Load Archive
     function loadArchive() {
       db.collection("pianos").where("status", "==", "Sold").orderBy("timestamp", "desc").onSnapshot(snapshot => {
         archiveList.innerHTML = "";
@@ -253,22 +247,8 @@
             Location: ${piano.location || ""} <br>
             Player System: ${piano.playerSystem || "None"} <br>
             Status: <span class='sold-tag'>Sold</span> <br>
-            Notes: ${piano.notes || ""}<br>
-            <label>Restore to: 
-              <select class="restore-status">
-                <option value="On Floor">On Floor</option>
-                <option value="In Storage">In Storage</option>
-                <option value="Detailed">Detailed</option>
-                <option value="Potential Buyer">Potential Buyer</option>
-              </select>
-            </label>
-            <button class="restore-btn">Restore</button>
+            Notes: ${piano.notes || ""}
           `;
-          // Restore button
-          div.querySelector(".restore-btn").addEventListener("click", () => {
-            const newStatus = div.querySelector(".restore-status").value;
-            db.collection("pianos").doc(doc.id).update({ status: newStatus });
-          });
           archiveList.appendChild(div);
         });
       });
