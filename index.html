@@ -1,102 +1,197 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>🎹 Piano Inventory</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <title>Piano Inventory</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
-    h1 { text-align: center; }
-    .controls { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; }
-    input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
-    button { padding: 8px 14px; border: none; background: #007bff; color: white; border-radius: 6px; cursor: pointer; }
-    button:hover { background: #0056b3; }
-    .inventory { margin-top: 20px; }
-    .item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
-    .item span { font-size: 16px; }
-    .deleteBtn { background: #dc3545; }
-    .deleteBtn:hover { background: #a71d2a; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f4;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .controls {
+      display: none; /* hidden until login */
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input {
+      padding: 8px;
+      margin: 5px;
+    }
+    button {
+      padding: 8px 12px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background: #007BFF;
+      color: white;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      margin-bottom: 5px;
+      background: #eee;
+      border-radius: 4px;
+    }
+    .auth {
+      margin-top: 20px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <h1>🎹 Piano Inventory</h1>
+  <div class="container">
+    <h1>Piano Inventory</h1>
 
-  <!-- Input form -->
-  <div class="controls">
-    <input id="brand" placeholder="Brand">
-    <input id="model" placeholder="Model">
-    <input id="qty" type="number" placeholder="Qty">
-    <button id="addBtn">Add Piano</button>
+    <!-- Controls (only visible when logged in) -->
+    <div class="controls">
+      <input id="brandInput" placeholder="Brand">
+      <input id="modelInput" placeholder="Model">
+      <input id="qtyInput" type="number" placeholder="Quantity">
+      <button id="addBtn">Add Piano</button>
+    </div>
+
+    <!-- Inventory List -->
+    <ul id="inventory"></ul>
+
+    <!-- Auth Section -->
+    <div class="auth">
+      <h2>Admin Login</h2>
+      <input id="email" placeholder="Email">
+      <input id="password" type="password" placeholder="Password">
+      <button id="loginBtn">Login</button>
+      <button id="logoutBtn" style="display:none;">Logout</button>
+    </div>
   </div>
-
-  <!-- Inventory list -->
-  <div class="inventory" id="inventory"></div>
 
   <!-- Firebase -->
   <script type="module">
-    // Import Firebase
+    // Import Firebase SDKs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
-  authDomain: "pianoinv.firebaseapp.com",
-  projectId: "pianoinv",
-  storageBucket: "pianoinv.firebasestorage.app",
-  messagingSenderId: "651707888262",
-  appId: "1:651707888262:web:23131a782e31a7bb511707",
-  measurementId: "G-1XQLEV28JZ"
-};
+    // TODO: Replace with your Firebase config
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
 
-    // Init Firebase + Firestore
+    // Init Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const inventoryCol = collection(db, "pianos");
+    const auth = getAuth(app);
 
-    // DOM elements
-    const inventoryDiv = document.getElementById("inventory");
-    const brandInput = document.getElementById("brand");
-    const modelInput = document.getElementById("model");
-    const qtyInput = document.getElementById("qty");
+    // DOM references
+    const inventoryList = document.getElementById("inventory");
+    const brandInput = document.getElementById("brandInput");
+    const modelInput = document.getElementById("modelInput");
+    const qtyInput = document.getElementById("qtyInput");
     const addBtn = document.getElementById("addBtn");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const controlsDiv = document.querySelector(".controls");
+
+    // Realtime inventory updates
+    onSnapshot(collection(db, "pianos"), (snapshot) => {
+      inventoryList.innerHTML = "";
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const li = document.createElement("li");
+        li.textContent = `${data.brand} - ${data.model} (Qty: ${data.quantity})`;
+
+        // Delete button (only when logged in)
+        if (auth.currentUser) {
+          const delBtn = document.createElement("button");
+          delBtn.textContent = "Delete";
+          delBtn.onclick = async () => {
+            await deleteDoc(doc(db, "pianos", docSnap.id));
+          };
+          li.appendChild(delBtn);
+        }
+
+        inventoryList.appendChild(li);
+      });
+    });
 
     // Add piano
     addBtn.addEventListener("click", async () => {
+      if (!auth.currentUser) {
+        alert("You must be logged in!");
+        return;
+      }
       const brand = brandInput.value.trim();
       const model = modelInput.value.trim();
       const qty = parseInt(qtyInput.value);
 
-      if (!brand || !model || isNaN(qty)) {
+      if (brand && model && qty > 0) {
+        await addDoc(collection(db, "pianos"), {
+          brand,
+          model,
+          quantity: qty
+        });
+        brandInput.value = "";
+        modelInput.value = "";
+        qtyInput.value = "";
+      } else {
         alert("Please fill all fields correctly.");
-        return;
       }
-
-      await addDoc(inventoryCol, { brand, model, quantity: qty });
-      brandInput.value = "";
-      modelInput.value = "";
-      qtyInput.value = "";
     });
 
-    // Realtime listener
-    onSnapshot(inventoryCol, snapshot => {
-      inventoryDiv.innerHTML = "";
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        const item = document.createElement("div");
-        item.className = "item";
-        item.innerHTML = `
-          <span>${data.brand} - ${data.model} (Qty: ${data.quantity})</span>
-          <button class="deleteBtn" onclick="deleteItem('${docSnap.id}')">Delete</button>
-        `;
-        inventoryDiv.appendChild(item);
-      });
+    // Login
+    loginBtn.addEventListener("click", async () => {
+      try {
+        await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+      } catch (err) {
+        alert("Login failed: " + err.message);
+      }
     });
 
-    // Delete piano
-    window.deleteItem = async (id) => {
-      await deleteDoc(doc(db, "pianos", id));
-    };
+    // Logout
+    logoutBtn.addEventListener("click", async () => {
+      await signOut(auth);
+    });
+
+    // Track login state
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loginBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+        controlsDiv.style.display = "flex";
+      } else {
+        loginBtn.style.display = "inline-block";
+        logoutBtn.style.display = "none";
+        controlsDiv.style.display = "none";
+      }
+    });
   </script>
 </body>
 </html>
