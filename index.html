@@ -7,10 +7,76 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+    h1, h2 { color: #333; }
+
     .hidden { display: none; }
-    .piano-card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 5px; }
+
+    #toggleFormBtn, #addPianoBtn, #logoutBtn, #loginBtn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 5px 0;
+    }
+
+    #toggleFormBtn { background: #555; color: white; }
+    #addPianoBtn { background: #28a745; color: white; }
+    #logoutBtn { background: #888; color: white; }
+    #loginBtn { background: #007bff; color: white; }
+
+    .piano-card {
+      background: white;
+      border: 1px solid #ddd;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: white;
+      margin-left: 6px;
+    }
+    .status-sold { background: #007bff; }
+    .status-other { background: #6c757d; }
+
+    .delete-btn {
+      background: #dc3545;
+      color: white;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 5px;
+    }
+
     .expand-btn { color: blue; cursor: pointer; font-size: 0.9em; margin-left: 5px; }
+
+    /* Accordion animation */
+    #piano-form {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.5s ease, padding 0.3s ease;
+      padding: 0 5px;
+    }
+    #piano-form.open {
+      max-height: 1000px;
+      padding: 10px 5px;
+    }
+
+    input, select, textarea {
+      margin: 5px 0;
+      padding: 6px;
+      width: 95%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    textarea { resize: vertical; height: 60px; }
   </style>
 </head>
 <body>
@@ -24,8 +90,11 @@
   </div>
   <button id="logoutBtn" class="hidden">Logout</button>
 
+  <!-- Toggle Button for Add Piano Form -->
+  <button id="toggleFormBtn" class="hidden">+ Add Piano</button>
+
   <!-- Add Piano Section -->
-  <div id="piano-form" class="hidden">
+  <div id="piano-form">
     <h2>Add Piano</h2>
     <input type="text" id="brand" placeholder="Brand"><br>
     <input type="text" id="serial" placeholder="Serial Number"><br>
@@ -49,11 +118,15 @@
   </div>
 
   <!-- Inventory List -->
-  <h2>Inventory</h2>
+  <h2>Active Inventory</h2>
   <div id="inventory"></div>
 
+  <!-- Archive List -->
+  <h2>Archive (Sold)</h2>
+  <div id="archive"></div>
+
   <script>
-    // Firebase config (your values)
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
       authDomain: "pianoinv.firebaseapp.com",
@@ -70,8 +143,10 @@
     // DOM
     const loginSection = document.getElementById("login-section");
     const logoutBtn = document.getElementById("logoutBtn");
+    const toggleFormBtn = document.getElementById("toggleFormBtn");
     const pianoForm = document.getElementById("piano-form");
     const inventoryDiv = document.getElementById("inventory");
+    const archiveDiv = document.getElementById("archive");
 
     // Login
     document.getElementById("loginBtn").addEventListener("click", () => {
@@ -96,13 +171,24 @@
       if (user) {
         loginSection.classList.add("hidden");
         logoutBtn.classList.remove("hidden");
-        pianoForm.classList.remove("hidden");
+        toggleFormBtn.classList.remove("hidden");
+        pianoForm.classList.remove("open"); // start hidden
         loadInventory();
+        loadArchive();
       } else {
         loginSection.classList.remove("hidden");
         logoutBtn.classList.add("hidden");
-        pianoForm.classList.add("hidden");
+        toggleFormBtn.classList.add("hidden");
+        pianoForm.classList.remove("open");
       }
+    });
+
+    // Toggle Add Piano form
+    toggleFormBtn.addEventListener("click", () => {
+      pianoForm.classList.toggle("open");
+      toggleFormBtn.textContent = pianoForm.classList.contains("open")
+        ? "– Hide Form"
+        : "+ Add Piano";
     });
 
     // Add piano
@@ -120,6 +206,11 @@
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       };
       await db.collection("pianos").add(piano);
+
+      // Clear form after submit
+      ["brand","serial","price","color","length","modelYear","notes"].forEach(id => document.getElementById(id).value = "");
+      document.getElementById("location").selectedIndex = 0;
+      document.getElementById("status").selectedIndex = 0;
     });
 
     // Load inventory
@@ -130,13 +221,14 @@
           const piano = doc.data();
           const div = document.createElement("div");
           div.className = "piano-card";
+          const statusBadge = `<span class="status-badge ${piano.status === "Sold" ? "status-sold" : "status-other"}">${piano.status}</span>`;
           div.innerHTML = `
-            <strong>${piano.brand}</strong> - ${piano.serial}<br>
+            <strong>${piano.brand}</strong> - ${piano.serial} ${statusBadge}<br>
             $${piano.price} | ${piano.color} | ${piano.length} | ${piano.modelYear}<br>
-            Location: ${piano.location} | Status: ${piano.status}<br>
+            Location: ${piano.location}<br>
             Notes: <span class="notes" data-full="${piano.notes || ''}">${truncateNotes(piano.notes || '')}</span>
             <span class="expand-btn">[Show More]</span>
-            <br><button onclick="deletePiano('${doc.id}')">Delete</button>
+            <br><button class="delete-btn" onclick="deleteOrArchivePiano('${doc.id}', '${piano.status}')">Delete</button>
           `;
           inventoryDiv.appendChild(div);
 
@@ -156,15 +248,42 @@
       });
     }
 
+    // Load archive
+    function loadArchive() {
+      db.collection("archive").orderBy("timestamp", "desc").onSnapshot(snapshot => {
+        archiveDiv.innerHTML = "";
+        snapshot.forEach(doc => {
+          const piano = doc.data();
+          const div = document.createElement("div");
+          div.className = "piano-card";
+          div.innerHTML = `
+            <strong>${piano.brand}</strong> - ${piano.serial}<br>
+            $${piano.price} | ${piano.color} | ${piano.length} | ${piano.modelYear}<br>
+            Location: ${piano.location}<br>
+            Status: <span class="status-badge status-sold">Sold</span><br>
+            Notes: ${piano.notes || ''}
+          `;
+          archiveDiv.appendChild(div);
+        });
+      });
+    }
+
     function truncateNotes(text) {
       return text.length > 50 ? text.substring(0, 50) + "..." : text;
     }
 
-    // Delete piano
-    async function deletePiano(id) {
-      await db.collection("pianos").doc(id).delete();
+    // Delete or Archive
+    async function deleteOrArchivePiano(id, status) {
+      const docRef = db.collection("pianos").doc(id);
+      const docSnap = await docRef.get();
+      if (!docSnap.exists) return;
+
+      if (status === "Sold") {
+        await db.collection("archive").add(docSnap.data());
+      }
+      await docRef.delete();
     }
-    window.deletePiano = deletePiano;
+    window.deleteOrArchivePiano = deleteOrArchivePiano;
   </script>
 </body>
 </html>
