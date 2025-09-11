@@ -45,6 +45,14 @@
     <button id="add-btn">Add Piano</button>
 
     <h2>Inventory List</h2>
+    <!-- Filter dropdown -->
+    <label for="filter-location">Filter by Location: </label>
+    <select id="filter-location">
+      <option value="All">All</option>
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
+    </select>
+
     <div id="inventory-list"></div>
   </div>
 
@@ -77,6 +85,7 @@
     const inventorySection = document.getElementById('inventory-section');
     const addBtn = document.getElementById('add-btn');
     const inventoryList = document.getElementById('inventory-list');
+    const filterLocation = document.getElementById('filter-location');
 
     // Login with Enter key
     passwordInput.addEventListener("keypress", (e) => {
@@ -142,25 +151,38 @@
     // Load inventory live
     function loadInventory() {
       db.collection("pianos").onSnapshot(snapshot => {
-        inventoryList.innerHTML = '';
-        snapshot.forEach(doc => {
-          const piano = doc.data();
-          const div = document.createElement('div');
-          div.className = 'piano-item';
-          div.innerHTML = `
-            <strong>${piano.brand} ${piano.model}</strong><br/>
-            Serial: ${piano.serial}<br/>
-            Price: $${piano.price}<br/>
-            Color: ${piano.color || "N/A"}<br/>
-            Length: ${piano.length || "N/A"}<br/>
-            Location: ${piano.location || "N/A"}<br/>
-            Status: ${piano.status}<br/>
-            <button onclick="deletePiano('${doc.id}')">Delete</button>
-          `;
-          inventoryList.appendChild(div);
-        });
+        renderInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       });
     }
+
+    // Render inventory with filter
+    function renderInventory(pianos) {
+      const filter = filterLocation.value;
+      inventoryList.innerHTML = '';
+      pianos.forEach(piano => {
+        if (filter !== "All" && piano.location !== filter) return;
+        const div = document.createElement('div');
+        div.className = 'piano-item';
+        div.innerHTML = `
+          <strong>${piano.brand} ${piano.model}</strong><br/>
+          Serial: ${piano.serial}<br/>
+          Price: $${piano.price}<br/>
+          Color: ${piano.color || "N/A"}<br/>
+          Length: ${piano.length || "N/A"}<br/>
+          Location: ${piano.location || "N/A"}<br/>
+          Status: ${piano.status}<br/>
+          <button onclick="deletePiano('${piano.id}')">Delete</button>
+        `;
+        inventoryList.appendChild(div);
+      });
+    }
+
+    // React to filter change
+    filterLocation.addEventListener("change", () => {
+      db.collection("pianos").get().then(snapshot => {
+        renderInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+    });
 
     // Delete piano
     async function deletePiano(id) {
