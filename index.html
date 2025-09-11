@@ -4,71 +4,30 @@
   <meta charset="UTF-8" />
   <title>Piano Inventory</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background: #f4f4f4;
-    }
-    h1, h2 {
-      text-align: center;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+    h1, h2 { text-align: center; }
     .container {
-      max-width: 900px;
-      margin: auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 900px; margin: auto; background: #fff; padding: 20px;
+      border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    .controls {
-      display: none;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    input, select {
-      padding: 8px;
-      margin: 5px;
-    }
+    .controls { display: none; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    input, select { padding: 8px; margin: 5px; }
     button {
-      padding: 8px 12px;
-      cursor: pointer;
-      border: none;
-      border-radius: 5px;
-      background: #007BFF;
-      color: white;
+      padding: 8px 12px; cursor: pointer; border: none; border-radius: 5px;
+      background: #007BFF; color: white;
     }
-    button:hover {
-      background: #0056b3;
-    }
-    ul {
-      list-style: none;
-      padding: 0;
-    }
+    button:hover { background: #0056b3; }
+    ul { list-style: none; padding: 0; }
     li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      padding: 8px;
-      margin-bottom: 5px;
-      background: #eee;
-      border-radius: 4px;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; padding: 8px; margin-bottom: 5px;
+      background: #eee; border-radius: 4px;
     }
-    .auth {
-      margin-top: 20px;
-      text-align: center;
-    }
-    .btn-group {
-      display: flex;
-      gap: 5px;
-    }
+    .auth { margin-top: 20px; text-align: center; }
+    .btn-group { display: flex; gap: 5px; }
     #searchInput {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 20px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
+      width: 100%; padding: 10px; margin-bottom: 20px;
+      border: 1px solid #ccc; border-radius: 6px;
     }
   </style>
 </head>
@@ -79,7 +38,7 @@
     <!-- Search -->
     <input id="searchInput" type="text" placeholder="Search by brand, model, or serial...">
 
-    <!-- Controls (only visible when logged in) -->
+    <!-- Controls (visible only when logged in) -->
     <div class="controls">
       <input id="brandInput" placeholder="Brand">
       <input id="modelInput" placeholder="Model">
@@ -100,12 +59,14 @@
     <!-- Inventory List -->
     <ul id="inventory"></ul>
 
-    <!-- Auth Section -->
+    <!-- Auth -->
     <div class="auth">
-      <h2>Admin Login</h2>
-      <input id="email" placeholder="Email">
-      <input id="password" type="password" placeholder="Password">
-      <button id="loginBtn">Login</button>
+      <h2 id="loginHeader">Admin Login</h2>
+      <div id="loginForm">
+        <input id="email" placeholder="Email">
+        <input id="password" type="password" placeholder="Password">
+        <button id="loginBtn">Login</button>
+      </div>
       <button id="logoutBtn" style="display:none;">Logout</button>
     </div>
   </div>
@@ -132,7 +93,15 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const loginForm = document.getElementById("loginForm");
+    const loginHeader = document.getElementById("loginHeader");
+    const controlsDiv = document.querySelector(".controls");
     const inventoryList = document.getElementById("inventory");
+    const searchInput = document.getElementById("searchInput");
     const brandInput = document.getElementById("brandInput");
     const modelInput = document.getElementById("modelInput");
     const serialInput = document.getElementById("serialInput");
@@ -141,142 +110,71 @@
     const statusInput = document.getElementById("statusInput");
     const addBtn = document.getElementById("addBtn");
     const updateBtn = document.getElementById("updateBtn");
-    const loginBtn = document.getElementById("loginBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const emailInput = document.getElementById("email");
-    const passwordInput = document.getElementById("password");
-    const controlsDiv = document.querySelector(".controls");
-    const searchInput = document.getElementById("searchInput");
 
     let editId = null;
-    let allPianos = []; // store all pianos for filtering
+    let allPianos = [];
 
-    // Realtime inventory updates
-    onSnapshot(collection(db, "pianos"), (snapshot) => {
-      allPianos = [];
-      snapshot.forEach((docSnap) => {
-        allPianos.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      renderList();
-    });
-
-    // Render inventory list with optional filter
-    function renderList() {
-      const filter = searchInput.value.toLowerCase();
-      inventoryList.innerHTML = "";
-      allPianos
-        .filter((p) =>
-          p.brand.toLowerCase().includes(filter) ||
-          p.model.toLowerCase().includes(filter) ||
-          p.serial.toLowerCase().includes(filter)
-        )
-        .forEach((p) => {
-          const li = document.createElement("li");
-          li.textContent = `${p.brand} - ${p.model} | Serial: ${p.serial} | Price: $${p.price} | Qty: ${p.quantity} | Status: ${p.status}`;
-
-          if (auth.currentUser) {
-            const btnGroup = document.createElement("div");
-            btnGroup.className = "btn-group";
-
-            const editBtn = document.createElement("button");
-            editBtn.textContent = "Edit";
-            editBtn.style.background = "orange";
-            editBtn.onclick = () => {
-              editId = p.id;
-              brandInput.value = p.brand;
-              modelInput.value = p.model;
-              serialInput.value = p.serial;
-              priceInput.value = p.price;
-              qtyInput.value = p.quantity;
-              statusInput.value = p.status;
-
-              addBtn.style.display = "none";
-              updateBtn.style.display = "inline-block";
-            };
-
-            const delBtn = document.createElement("button");
-            delBtn.textContent = "Delete";
-            delBtn.onclick = async () => {
-              await deleteDoc(doc(db, "pianos", p.id));
-            };
-
-            btnGroup.appendChild(editBtn);
-            btnGroup.appendChild(delBtn);
-            li.appendChild(btnGroup);
-          }
-
-          inventoryList.appendChild(li);
-        });
-    }
-
-    // Filter on search input
-    searchInput.addEventListener("input", renderList);
-
-    // Add piano
-    addBtn.addEventListener("click", async () => {
-      if (!auth.currentUser) {
-        alert("You must be logged in!");
-        return;
-      }
-      const brand = brandInput.value.trim();
-      const model = modelInput.value.trim();
-      const serial = serialInput.value.trim();
-      const price = parseFloat(priceInput.value);
-      const qty = parseInt(qtyInput.value);
-      const status = statusInput.value;
-
-      if (brand && model && serial && !isNaN(price) && qty > 0) {
-        await addDoc(collection(db, "pianos"), { brand, model, serial, price, quantity: qty, status });
-        clearInputs();
-      } else {
-        alert("Please fill all fields correctly.");
-      }
-    });
-
-    // Update piano
-    updateBtn.addEventListener("click", async () => {
-      if (editId) {
-        await updateDoc(doc(db, "pianos", editId), {
-          brand: brandInput.value.trim(),
-          model: modelInput.value.trim(),
-          serial: serialInput.value.trim(),
-          price: parseFloat(priceInput.value),
-          quantity: parseInt(qtyInput.value),
-          status: statusInput.value
-        });
-        clearInputs();
-        addBtn.style.display = "inline-block";
-        updateBtn.style.display = "none";
-        editId = null;
-      }
-    });
-
-    // Login
-    loginBtn.addEventListener("click", async () => {
+    // LOGIN ---------------------
+    async function doLogin() {
       try {
         await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
       } catch (err) {
         alert("Login failed: " + err.message);
       }
+    }
+    loginBtn.addEventListener("click", doLogin);
+    [emailInput, passwordInput].forEach(input => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doLogin();
+      });
     });
 
-    // Logout
-    logoutBtn.addEventListener("click", async () => {
-      await signOut(auth);
-    });
+    logoutBtn.addEventListener("click", async () => { await signOut(auth); });
 
-    // Track login state
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        loginBtn.style.display = "none";
+        loginForm.style.display = "none";
+        loginHeader.style.display = "none";
         logoutBtn.style.display = "inline-block";
         controlsDiv.style.display = "flex";
       } else {
-        loginBtn.style.display = "inline-block";
+        loginForm.style.display = "block";
+        loginHeader.style.display = "block";
         logoutBtn.style.display = "none";
         controlsDiv.style.display = "none";
       }
     });
+
+    // INVENTORY ---------------------
+    async function addPiano() {
+      if (!brandInput.value || !modelInput.value) return alert("Enter brand and model");
+      await addDoc(collection(db, "pianos"), {
+        brand: brandInput.value,
+        model: modelInput.value,
+        serial: serialInput.value,
+        price: priceInput.value,
+        quantity: qtyInput.value,
+        status: statusInput.value
+      });
+      clearInputs();
+    }
+
+    async function updatePiano() {
+      if (!editId) return;
+      const docRef = doc(db, "pianos", editId);
+      await updateDoc(docRef, {
+        brand: brandInput.value,
+        model: modelInput.value,
+        serial: serialInput.value,
+        price: priceInput.value,
+        quantity: qtyInput.value,
+        status: statusInput.value
+      });
+      clearInputs();
+      addBtn.style.display = "inline-block";
+      updateBtn.style.display = "none";
+      editId = null;
+    }
 
     function clearInputs() {
       brandInput.value = "";
@@ -286,6 +184,80 @@
       qtyInput.value = "";
       statusInput.value = "On Floor";
     }
+
+    addBtn.addEventListener("click", addPiano);
+    updateBtn.addEventListener("click", updatePiano);
+
+    // ENTER key in form fields → add or update
+    [brandInput, modelInput, serialInput, priceInput, qtyInput].forEach(input => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (editId) {
+            updatePiano();
+          } else {
+            addPiano();
+          }
+        }
+      });
+    });
+
+    // REALTIME INVENTORY RENDER
+    onSnapshot(collection(db, "pianos"), (snapshot) => {
+      allPianos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderList(allPianos);
+    });
+
+    function renderList(pianos) {
+      inventoryList.innerHTML = "";
+      pianos.forEach(p => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div>
+            <strong>${p.brand}</strong> - ${p.model} 
+            | Serial: ${p.serial || "N/A"} 
+            | Price: $${p.price || "N/A"} 
+            | Qty: ${p.quantity || 0} 
+            | Status: ${p.status || "N/A"}
+          </div>
+          <div class="btn-group">
+            <button onclick="editPiano('${p.id}')">Edit</button>
+            <button onclick="deletePiano('${p.id}')" style="background:red;">Delete</button>
+          </div>
+        `;
+        inventoryList.appendChild(li);
+      });
+    }
+
+    // EDIT + DELETE
+    window.editPiano = (id) => {
+      const piano = allPianos.find(p => p.id === id);
+      if (!piano) return;
+      brandInput.value = piano.brand;
+      modelInput.value = piano.model;
+      serialInput.value = piano.serial;
+      priceInput.value = piano.price;
+      qtyInput.value = piano.quantity;
+      statusInput.value = piano.status;
+      editId = id;
+      addBtn.style.display = "none";
+      updateBtn.style.display = "inline-block";
+    };
+
+    window.deletePiano = async (id) => {
+      await deleteDoc(doc(db, "pianos", id));
+    };
+
+    // SEARCH FILTER
+    searchInput.addEventListener("input", (e) => {
+      const term = e.target.value.toLowerCase();
+      const filtered = allPianos.filter(p =>
+        (p.brand && p.brand.toLowerCase().includes(term)) ||
+        (p.model && p.model.toLowerCase().includes(term)) ||
+        (p.serial && p.serial.toLowerCase().includes(term))
+      );
+      renderList(filtered);
+    });
   </script>
 </body>
 </html>
