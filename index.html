@@ -1,0 +1,117 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2575.7">
+  <style type="text/css">
+    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
+  </style>
+</head>
+<body>
+<p class="p1">&lt;!DOCTYPE html&gt;</p>
+<p class="p1">&lt;html lang="en"&gt;</p>
+<p class="p1">&lt;head&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;meta charset="UTF-8"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;title&gt;🎹 Piano Inventory&lt;/title&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;style&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>h1 { text-align: center; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.controls { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>button { padding: 8px 14px; border: none; background: #007bff; color: white; border-radius: 6px; cursor: pointer; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>button:hover { background: #0056b3; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.inventory { margin-top: 20px; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.item span { font-size: 16px; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.deleteBtn { background: #dc3545; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>.deleteBtn:hover { background: #a71d2a; }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;/style&gt;</p>
+<p class="p1">&lt;/head&gt;</p>
+<p class="p1">&lt;body&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;h1&gt;🎹 Piano Inventory&lt;/h1&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;!-- Input form --&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;div class="controls"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;input id="brand" placeholder="Brand"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;input id="model" placeholder="Model"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;input id="qty" type="number" placeholder="Qty"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;button id="addBtn"&gt;Add Piano&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;!-- Inventory list --&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;div class="inventory" id="inventory"&gt;&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;!-- Firebase --&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;script type="module"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>// Import Firebase</p>
+<p class="p1"><span class="Apple-converted-space">    </span>import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// TODO: Replace with your Firebase project config</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const firebaseConfig = {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>apiKey: "YOUR_API_KEY",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>authDomain: "YOUR_PROJECT_ID.firebaseapp.com",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>projectId: "YOUR_PROJECT_ID",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>storageBucket: "YOUR_PROJECT_ID.appspot.com",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>messagingSenderId: "SENDER_ID",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>appId: "APP_ID"</p>
+<p class="p1"><span class="Apple-converted-space">    </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// Init Firebase + Firestore</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const app = initializeApp(firebaseConfig);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const db = getFirestore(app);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const inventoryCol = collection(db, "pianos");</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// DOM elements</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const inventoryDiv = document.getElementById("inventory");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const brandInput = document.getElementById("brand");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const modelInput = document.getElementById("model");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const qtyInput = document.getElementById("qty");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const addBtn = document.getElementById("addBtn");</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// Add piano</p>
+<p class="p1"><span class="Apple-converted-space">    </span>addBtn.addEventListener("click", async () =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const brand = brandInput.value.trim();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const model = modelInput.value.trim();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const qty = parseInt(qtyInput.value);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>if (!brand || !model || isNaN(qty)) {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>alert("Please fill all fields correctly.");</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>await addDoc(inventoryCol, { brand, model, quantity: qty });</p>
+<p class="p1"><span class="Apple-converted-space">      </span>brandInput.value = "";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>modelInput.value = "";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>qtyInput.value = "";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>});</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// Realtime listener</p>
+<p class="p1"><span class="Apple-converted-space">    </span>onSnapshot(inventoryCol, snapshot =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>inventoryDiv.innerHTML = "";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>snapshot.forEach(docSnap =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const data = docSnap.data();</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const item = document.createElement("div");</p>
+<p class="p1"><span class="Apple-converted-space">        </span>item.className = "item";</p>
+<p class="p1"><span class="Apple-converted-space">        </span>item.innerHTML = `</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;span&gt;${data.brand} - ${data.model} (Qty: ${data.quantity})&lt;/span&gt;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>&lt;button class="deleteBtn" onclick="deleteItem('${docSnap.id}')"&gt;Delete&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>`;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>inventoryDiv.appendChild(item);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>});</p>
+<p class="p1"><span class="Apple-converted-space">    </span>});</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// Delete piano</p>
+<p class="p1"><span class="Apple-converted-space">    </span>window.deleteItem = async (id) =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>await deleteDoc(doc(db, "pianos", id));</p>
+<p class="p1"><span class="Apple-converted-space">    </span>};</p>
+<p class="p1"><span class="Apple-converted-space">  </span>&lt;/script&gt;</p>
+<p class="p1">&lt;/body&gt;</p>
+<p class="p1">&lt;/html&gt;</p>
+</body>
+</html>
