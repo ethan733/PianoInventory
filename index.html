@@ -7,13 +7,13 @@
     body { font-family: Arial, sans-serif; margin: 20px; }
     .hidden { display: none; }
     input, select, textarea { margin: 5px 0; padding: 6px; width: 250px; }
-    button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; border: none; border-radius: 4px; }
+    button { margin: 5px 0; padding: 6px 12px; cursor: pointer; border: none; border-radius: 4px; }
     #loginSection, #piano-form { margin-bottom: 20px; }
     #piano-list, #archive-list { margin-top: 20px; }
     .piano-card { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 6px; background: #f9f9f9; }
     .delete-btn { background-color: red; color: white; }
+    .sell-btn { background-color: blue; color: white; }
     .add-btn { background-color: green; color: white; }
-    .sold-btn { background-color: blue; color: white; }
     .sold-tag { background-color: blue; color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
     .note-preview { white-space: pre-line; }
     .toggle-notes { color: #007BFF; cursor: pointer; font-size: 12px; margin-left: 10px; }
@@ -81,7 +81,7 @@
   </div>
 
   <script>
-    // Firebase Config
+    // ✅ Correct Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
       authDomain: "pianoinv.firebaseapp.com",
@@ -115,15 +115,12 @@
         .catch(err => alert(err.message));
     });
 
-    // Enter key login
     password.addEventListener("keypress", (e) => {
       if (e.key === "Enter") loginBtn.click();
     });
 
-    // Logout
     logoutBtn.addEventListener("click", () => auth.signOut());
 
-    // Auth State
     auth.onAuthStateChanged(user => {
       if (user) {
         loginSection.classList.add("hidden");
@@ -145,7 +142,6 @@
       }
     });
 
-    // Toggle Add Piano Form
     toggleFormBtn.addEventListener("click", () => {
       pianoForm.classList.toggle("hidden");
       toggleFormBtn.textContent = pianoForm.classList.contains("hidden")
@@ -153,7 +149,6 @@
         : "– Hide Form";
     });
 
-    // Toggle Archive Section
     toggleArchiveBtn.addEventListener("click", () => {
       archiveSection.classList.toggle("hidden");
       toggleArchiveBtn.textContent = archiveSection.classList.contains("hidden")
@@ -198,32 +193,26 @@
             Notes: <span class="note-preview">${(piano.notes || "").substring(0, 50)}</span>
             ${(piano.notes && piano.notes.length > 50) ? `<span class="toggle-notes">[Show More]</span>` : ""}
             <br>
-            <button class="sold-btn">Sell</button>
+            <button class="sell-btn">Sell</button>
             <button class="delete-btn">Delete</button>
           `;
-
           // Sell button
-          div.querySelector(".sold-btn").addEventListener("click", () => {
-            if (confirm("Are you sure you want to mark this piano as Sold?")) {
-              const updated = { 
-                ...piano, 
-                status: "Sold", 
-                soldAt: firebase.firestore.FieldValue.serverTimestamp() 
-              };
-              db.collection("archive").add(updated).then(() => {
+          const sellBtn = div.querySelector(".sell-btn");
+          sellBtn.addEventListener("click", () => {
+            if (confirm("Mark this piano as Sold and move to archive?")) {
+              db.collection("archive").add(piano).then(() => {
                 db.collection("pianos").doc(doc.id).delete();
-              }).catch(err => alert("Error moving to archive: " + err.message));
+              });
             }
           });
-
           // Delete button
-          div.querySelector(".delete-btn").addEventListener("click", () => {
+          const deleteBtn = div.querySelector(".delete-btn");
+          deleteBtn.addEventListener("click", () => {
             if (confirm("Are you sure you want to delete this piano?")) {
               db.collection("pianos").doc(doc.id).delete();
             }
           });
-
-          // Toggle notes
+          // Notes toggle
           const toggleNotes = div.querySelector(".toggle-notes");
           if (toggleNotes) {
             toggleNotes.addEventListener("click", () => {
@@ -237,7 +226,6 @@
               }
             });
           }
-
           pianoList.appendChild(div);
         });
       });
@@ -245,7 +233,7 @@
 
     // Load Archive
     function loadArchive() {
-      db.collection("archive").orderBy("soldAt", "desc").onSnapshot(snapshot => {
+      db.collection("archive").orderBy("timestamp", "desc").onSnapshot(snapshot => {
         archiveList.innerHTML = "";
         snapshot.forEach(doc => {
           const piano = doc.data();
@@ -259,14 +247,8 @@
             Location: ${piano.location || ""} <br>
             Player System: ${piano.playerSystem || "None"} <br>
             Status: <span class='sold-tag'>Sold</span> <br>
-            Notes: ${piano.notes || ""}<br>
-            <button class="delete-btn">Delete</button>
+            Notes: ${piano.notes || ""}
           `;
-          div.querySelector(".delete-btn").addEventListener("click", () => {
-            if (confirm("Are you sure you want to delete this archived piano?")) {
-              db.collection("archive").doc(doc.id).delete();
-            }
-          });
           archiveList.appendChild(div);
         });
       });
