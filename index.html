@@ -1,154 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Piano Inventory (Full)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- Firebase compat libs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-
+  <meta charset="UTF-8">
+  <title>Piano Inventory</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
   <style>
-    :root{--card-bg:#fff;--muted:#666}
-    body{font-family:Inter,system-ui,Roboto,Arial,sans-serif;background:#f4f6f8;margin:16px}
-    h1{margin:0 0 16px;text-align:center}
-    .container{max-width:1100px;margin:0 auto}
-    .top-row{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
-    .auth {display:flex; gap:8px; align-items:center;}
-    input[type="email"],input[type="password"],button{padding:8px;border-radius:6px;border:1px solid #ccc}
-    button{cursor:pointer}
-    .hidden{display:none}
-    .controls{display:flex;gap:8px;align-items:center}
-    .btn {padding:8px 12px;border-radius:6px;border:none;color:#fff}
-    .btn-add {background:#2ecc71}
-    .btn-delete {background:#e74c3c}
-    .btn-sell {background:#3498db}
-    .btn-restore {background:#f39c12}
-    .card {background:var(--card-bg);border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;gap:12px;align-items:flex-start}
-    .card + .card{margin-top:12px}
-    .details{flex:2}
-    .photo{flex:1;text-align:right}
-    .photo img{max-width:220px;max-height:150px;border-radius:8px;object-fit:cover}
-    .note-preview{white-space:pre-line;color:#333}
-    .meta{color:var(--muted);font-size:13px;margin-top:6px}
-    .toggle-notes{color:#1f6feb;cursor:pointer;font-size:13px;margin-left:6px}
-    form .row{display:flex;gap:8px}
-    form label{display:block;margin-top:6px;font-size:14px}
-    form input[type="text"],form input[type="number"],form input[type="date"],form textarea,form select{width:100%;padding:8px;border-radius:6px;border:1px solid #ccc}
-    .form-panel{background:#fff;padding:12px;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:16px}
-    progress{width:100%;height:12px;border-radius:6px}
-    .small {font-size:13px;color:var(--muted)}
-    .tabs {display:flex;gap:8px;margin-bottom:12px}
-    .tab {padding:8px 12px;border-radius:8px;background:#e9eef3;cursor:pointer}
-    .tab.active {background:#d0dced;font-weight:600}
-    @media (max-width:760px){
-      .card{flex-direction:column}
-      .photo{text-align:left}
-      .photo img{width:100%;height:auto;max-height:none}
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .hidden { display: none; }
+    .tab { cursor: pointer; padding: 10px; margin-right: 5px; border: 1px solid #ccc; display: inline-block; }
+    .tab.active { background: #eee; font-weight: bold; }
+    .piano-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    button { margin: 5px; padding: 5px 10px; }
+    .btn-delete { background: red; color: white; }
+    .btn-sell { background: blue; color: white; }
+    .btn-archive { background: gray; color: white; }
+    .btn-add { background: green; color: white; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Piano Inventory</h1>
 
-    <div class="top-row">
-      <div class="auth" id="authSection">
-        <input id="email" type="email" placeholder="Email" />
-        <input id="password" type="password" placeholder="Password" />
-        <button id="loginBtn">Login</button>
-        <button id="logoutBtn" class="hidden">Logout</button>
-      </div>
+<h1>Piano Inventory</h1>
 
-      <div class="controls">
-        <button id="toggleFormBtn" class="hidden btn btn-add">+ Add Piano</button>
-        <button id="toggleArchiveBtn" class="hidden tab">+ Show Archive</button>
-      </div>
-    </div>
+<!-- Login -->
+<div id="login-section">
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <button onclick="logout()" class="hidden" id="logoutBtn">Logout</button>
+</div>
 
-    <!-- Add / Edit Panel -->
-    <div id="formPanel" class="form-panel hidden">
-      <h3>Add Piano</h3>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div style="flex:1;min-width:240px">
-          <label>Brand <input id="brand" type="text"></label>
-          <label>Model <input id="model" type="text"></label>
-          <label>Model Year <input id="modelYear" type="number"></label>
-          <label>Serial Number <input id="serial" type="text"></label>
-          <label>Price <input id="price" type="number"></label>
-          <label>Color <input id="color" type="text"></label>
-          <label>Length <input id="length" type="text"></label>
-          <label>Location
-            <select id="location">
-              <option value="Gallery">Gallery</option>
-              <option value="Cartersville">Cartersville</option>
-            </select>
-          </label>
-          <label>Player System
-            <select id="playerSystem">
-              <option value="None">No Player System</option>
-              <option value="PianoDisc">PianoDisc</option>
-              <option value="Spirio">Steinway Spirio</option>
-              <option value="QRS">QRS</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
-        </div>
+<!-- Tabs -->
+<div>
+  <span class="tab active" onclick="showTab('active')">Active</span>
+  <span class="tab" onclick="showTab('sold')">Sold</span>
+  <span class="tab" onclick="showTab('archive')">Archive</span>
+</div>
 
-        <div style="flex:1;min-width:240px">
-          <label>Status
-            <select id="status">
-              <option value="On Floor">On Floor</option>
-              <option value="In Storage">In Storage</option>
-              <option value="Sold">Sold</option>
-            </select>
-          </label>
+<!-- Add Piano Form -->
+<div id="form-section" class="hidden">
+  <h2>Add Piano</h2>
+  <form id="pianoForm">
+    <input type="text" id="brand" placeholder="Brand" required><br>
+    <input type="text" id="model" placeholder="Model"><br>
+    <input type="number" id="year" placeholder="Year"><br>
+    <input type="text" id="color" placeholder="Color"><br>
+    <input type="text" id="length" placeholder="Length"><br>
+    <select id="location">
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
+    </select><br>
+    <label>Player System <input type="checkbox" id="playerSystem"></label><br>
+    <label>Detailed <input type="checkbox" id="detailed"></label><br>
+    <input type="date" id="detailDate"><br>
+    <textarea id="notes" placeholder="Notes"></textarea><br>
+    <input type="file" id="photo"><br>
+    <button type="submit" class="btn-add">Add Piano</button>
+  </form>
+</div>
 
-          <label style="display:flex;align-items:center;gap:8px">
-            <input id="detailedCheckbox" type="checkbox" /> Detailed
-          </label>
+<!-- Listings -->
+<div id="active-list"></div>
+<div id="sold-list" class="hidden"></div>
+<div id="archive-list" class="hidden"></div>
 
-          <label id="detailedDateLabel" class="hidden">Date of Detail <input id="detailedDate" type="date"></label>
-
-          <label>Notes <textarea id="notes" rows="4"></textarea></label>
-
-          <label>Photo (optional) <input id="photo" type="file" accept="image/*"></label>
-          <img id="photoPreview" class="hidden" style="max-width:200px;border-radius:6px;margin-top:8px" alt="Preview">
-
-          <progress id="uploadProgress" value="0" max="100" class="hidden"></progress>
-
-          <div style="margin-top:8px;display:flex;gap:8px">
-            <button id="addBtn" class="btn btn-add">Add Piano</button>
-            <button id="cancelAdd" class="btn" style="background:#999;color:#fff">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div style="display:flex;gap:12px;align-items:center;justify-content:flex-start;margin-bottom:12px">
-      <div class="tabs" role="tablist">
-        <div id="tabActive" class="tab active" role="tab">Active</div>
-        <div id="tabArchive" class="tab" role="tab">Archive</div>
-      </div>
-      <div class="small"> (Public can view; login to modify)</div>
-    </div>
-
-    <!-- Active list -->
-    <div id="piano-list"></div>
-
-    <!-- Archive list -->
-    <div id="archive-section" class="hidden">
-      <h3>Archive</h3>
-      <div id="archive-list"></div>
-    </div>
-  </div>
-
-  <script>
-  // -------------------------
-  // Firebase config - update as needed
-  // -------------------------
+<script>
+  // Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
     authDomain: "pianoinv.firebaseapp.com",
@@ -158,356 +77,130 @@
     appId: "1:651707888262:web:23131a782e31a7bb511707",
     measurementId: "G-1XQLEV28JZ"
   };
-
   firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
   const db = firebase.firestore();
   const storage = firebase.storage();
 
-  // DOM refs
-  const loginBtn = document.getElementById("loginBtn");
-  const logoutBtn = document.getElementById("logoutBtn");
-  const emailInput = document.getElementById("email");
-  const passwordInput = document.getElementById("password");
-  const toggleFormBtn = document.getElementById("toggleFormBtn");
-  const formPanel = document.getElementById("formPanel");
-  const addBtn = document.getElementById("addBtn");
-  const cancelAdd = document.getElementById("cancelAdd");
-  const toggleArchiveBtn = document.getElementById("toggleArchiveBtn");
-  const pianoList = document.getElementById("piano-list");
-  const archiveSection = document.getElementById("archive-section");
-  const archiveList = document.getElementById("archive-list");
-  const uploadProgress = document.getElementById("uploadProgress");
-  const photoInput = document.getElementById("photo");
-  const photoPreview = document.getElementById("photoPreview");
-  const detailedCheckbox = document.getElementById("detailedCheckbox");
-  const detailedDateLabel = document.getElementById("detailedDateLabel");
+  let currentUser = null;
 
-  // login with email/password
-  loginBtn.addEventListener("click", () => {
-    auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value)
+  // Auth
+  firebase.auth().onAuthStateChanged(user => {
+    if (user) {
+      currentUser = user;
+      document.getElementById("form-section").classList.remove("hidden");
+      document.getElementById("logoutBtn").classList.remove("hidden");
+    } else {
+      currentUser = null;
+      document.getElementById("form-section").classList.add("hidden");
+      document.getElementById("logoutBtn").classList.add("hidden");
+    }
+  });
+
+  function login() {
+    const email = document.getElementById("email").value;
+    const pass = document.getElementById("password").value;
+    firebase.auth().signInWithEmailAndPassword(email, pass)
       .catch(err => alert(err.message));
-  });
+  }
+  function logout() {
+    firebase.auth().signOut();
+  }
 
-  passwordInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") loginBtn.click();
-  });
-
-  logoutBtn.addEventListener("click", () => auth.signOut());
-
-  // show/hide date input when detailed checkbox toggles
-  detailedCheckbox.addEventListener("change", () => {
-    if (detailedCheckbox.checked) {
-      detailedDateLabel.classList.remove("hidden");
-    } else {
-      detailedDateLabel.classList.add("hidden");
-      document.getElementById("detailedDate").value = "";
-    }
-  });
-
-  // preview selected image
-  photoInput.addEventListener("change", () => {
-    const f = photoInput.files[0];
-    if (!f) {
-      photoPreview.classList.add("hidden");
-      photoPreview.src = "";
-      return;
-    }
-    const url = URL.createObjectURL(f);
-    photoPreview.src = url;
-    photoPreview.classList.remove("hidden");
-  });
-
-  // toggle form
-  toggleFormBtn.addEventListener("click", () => {
-    formPanel.classList.toggle("hidden");
-    toggleFormBtn.textContent = formPanel.classList.contains("hidden") ? "+ Add Piano" : "– Hide Form";
-  });
-  cancelAdd.addEventListener("click", () => {
-    formPanel.classList.add("hidden");
-    toggleFormBtn.textContent = "+ Add Piano";
-    document.getElementById("brand").value = "";
-    document.getElementById("model").value = "";
-  });
-
-  // toggle archive section
-  toggleArchiveBtn.addEventListener("click", () => {
-    archiveSection.classList.toggle("hidden");
-    toggleArchiveBtn.textContent = archiveSection.classList.contains("hidden") ? "+ Show Archive" : "– Hide Archive";
-  });
-
-  // tab switching (active / archive)
-  document.getElementById("tabActive").addEventListener("click", () => {
-    document.getElementById("tabActive").classList.add("active");
-    document.getElementById("tabArchive").classList.remove("active");
-    archiveSection.classList.add("hidden");
-  });
-  document.getElementById("tabArchive").addEventListener("click", () => {
-    document.getElementById("tabArchive").classList.add("active");
-    document.getElementById("tabActive").classList.remove("active");
-    archiveSection.classList.remove("hidden");
-  });
-
-  // auth state handling
-  let isLoggedIn = false;
-  auth.onAuthStateChanged(user => {
-    isLoggedIn = !!user;
-    if (isLoggedIn) {
-      emailInput.classList.add("hidden");
-      passwordInput.classList.add("hidden");
-      loginBtn.classList.add("hidden");
-      logoutBtn.classList.remove("hidden");
-      toggleFormBtn.classList.remove("hidden");
-      toggleArchiveBtn.classList.remove("hidden");
-      formPanel.classList.add("hidden");
-      loadInventory();
-      loadArchive();
-    } else {
-      emailInput.classList.remove("hidden");
-      passwordInput.classList.remove("hidden");
-      loginBtn.classList.remove("hidden");
-      logoutBtn.classList.add("hidden");
-      toggleFormBtn.classList.add("hidden");
-      toggleArchiveBtn.classList.add("hidden");
-      formPanel.classList.add("hidden");
-      pianoList.innerHTML = "";
-      archiveList.innerHTML = "";
-    }
-  });
-
-  // add piano (with photo upload + progress)
-  addBtn.addEventListener("click", async () => {
-    if (!isLoggedIn) { alert("Please login to add a piano."); return; }
-
-    addBtn.disabled = true;
-    addBtn.textContent = "Working...";
-    uploadProgress.value = 0;
-    uploadProgress.classList.add("hidden"); // show only if file chosen
+  // Add piano
+  document.getElementById("pianoForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
     let photoURL = "";
-
-    try {
-      const file = photoInput.files[0];
-      if (file) {
-        uploadProgress.classList.remove("hidden");
-        const fileRef = storage.ref("piano_photos/" + Date.now() + "_" + file.name);
-        const uploadTask = fileRef.put(file);
-
-        // wait for upload to complete while updating progress
-        await new Promise((resolve, reject) => {
-          uploadTask.on("state_changed",
-            snapshot => {
-              const pct = Math.floor((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-              uploadProgress.value = pct;
-            },
-            err => reject(err),
-            async () => {
-              photoURL = await uploadTask.snapshot.ref.getDownloadURL();
-              resolve();
-            }
-          );
-        });
-      }
-
-      const docData = {
-        brand: document.getElementById("brand").value || "",
-        model: document.getElementById("model").value || "",
-        modelYear: document.getElementById("modelYear").value || "",
-        serial: document.getElementById("serial").value || "",
-        price: document.getElementById("price").value || "",
-        color: document.getElementById("color").value || "",
-        length: document.getElementById("length").value || "",
-        location: document.getElementById("location").value || "",
-        playerSystem: document.getElementById("playerSystem").value || "",
-        status: document.getElementById("status").value || "On Floor",
-        detailed: document.getElementById("detailedCheckbox").checked || false,
-        detailedDate: document.getElementById("detailedDate").value || "",
-        notes: document.getElementById("notes").value || "",
-        photo: photoURL,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      };
-
-      await db.collection("pianos").add(docData);
-
-      // reset form
-      document.querySelectorAll("#formPanel input, #formPanel textarea, #formPanel select").forEach(el => {
-        if (el.type === "checkbox") el.checked = false;
-        else el.value = "";
-      });
-      photoPreview.src = "";
-      photoPreview.classList.add("hidden");
-      uploadProgress.classList.add("hidden");
-      addBtn.disabled = false;
-      addBtn.textContent = "Add Piano";
-      formPanel.classList.add("hidden");
-      toggleFormBtn.textContent = "+ Add Piano";
-    } catch (err) {
-      console.error(err);
-      alert("Error adding piano: " + err.message);
-      addBtn.disabled = false;
-      addBtn.textContent = "Add Piano";
-      uploadProgress.classList.add("hidden");
+    const photoFile = document.getElementById("photo").files[0];
+    if (photoFile) {
+      const storageRef = storage.ref("piano_photos/" + Date.now() + "_" + photoFile.name);
+      await storageRef.put(photoFile);
+      photoURL = await storageRef.getDownloadURL();
     }
+    await db.collection("pianos").add({
+      brand: document.getElementById("brand").value,
+      model: document.getElementById("model").value,
+      year: document.getElementById("year").value,
+      color: document.getElementById("color").value,
+      length: document.getElementById("length").value,
+      location: document.getElementById("location").value,
+      playerSystem: document.getElementById("playerSystem").checked,
+      detailed: document.getElementById("detailed").checked,
+      detailDate: document.getElementById("detailDate").value,
+      notes: document.getElementById("notes").value,
+      photoURL: photoURL,
+      status: "active",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    e.target.reset();
   });
 
-  // load active inventory
-  function loadInventory() {
-    db.collection("pianos").orderBy("timestamp", "desc").onSnapshot(snapshot => {
-      pianoList.innerHTML = "";
-      snapshot.forEach(doc => {
-        const p = doc.data();
-        const card = document.createElement("div");
-        card.className = "card";
+  // Render piano
+  function renderPiano(doc, containerId) {
+    const data = doc.data();
+    const pianoDiv = document.createElement("div");
+    pianoDiv.classList.add("piano-item");
 
-        // details left, photo right
-        const left = document.createElement("div");
-        left.className = "details";
-        const notesPreview = (p.notes || "").substring(0,120);
-        left.innerHTML = `
-          <strong>${escapeHtml(p.brand)} ${escapeHtml(p.model)} ${p.modelYear ? '('+escapeHtml(p.modelYear)+')' : ''}</strong>
-          <div class="meta">Serial: ${escapeHtml(p.serial)} — Price: $${escapeHtml(p.price)}</div>
-          <div class="meta">Color: ${escapeHtml(p.color)} | Length: ${escapeHtml(p.length)} | Location: ${escapeHtml(p.location)}</div>
-          <div class="meta">Player System: ${escapeHtml(p.playerSystem || 'None')} | Status: ${p.status === 'Sold' ? '<span style="background:#1f6feb;color:#fff;padding:2px 6px;border-radius:4px">Sold</span>' : escapeHtml(p.status)}</div>
-          <div style="margin-top:8px">${p.detailed ? `<span style="color:green">✔ Detailed (${escapeHtml(p.detailedDate || 'N/A')})</span>` : `<span style="color:#999">Not detailed</span>`}</div>
-          <div style="margin-top:8px" class="note-preview">${escapeHtml(notesPreview)}${(p.notes && p.notes.length>120)? '...' : ''}</div>
-        `;
+    pianoDiv.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="flex: 1;">
+          <p><strong>Brand:</strong> ${data.brand}</p>
+          <p><strong>Model:</strong> ${data.model}</p>
+          <p><strong>Year:</strong> ${data.year}</p>
+          <p><strong>Color:</strong> ${data.color}</p>
+          <p><strong>Length:</strong> ${data.length}</p>
+          <p><strong>Location:</strong> ${data.location}</p>
+          <p><strong>Player System:</strong> ${data.playerSystem ? "Yes" : "No"}</p>
+          <p><strong>Detailed:</strong> ${data.detailed ? "Yes (" + data.detailDate + ")" : "No"}</p>
+          <p><strong>Notes:</strong> ${data.notes || ""}</p>
+          ${currentUser ? `
+            <button onclick="updateStatus('${doc.id}','sold')" class="btn-sell">Sell</button>
+            <button onclick="updateStatus('${doc.id}','archive')" class="btn-archive">Archive</button>
+            <button onclick="deletePiano('${doc.id}')" class="btn-delete">Delete</button>
+          ` : ""}
+        </div>
+        ${data.photoURL ? `<img src="${data.photoURL}" alt="Piano Photo" style="max-width:200px; max-height:150px; object-fit:cover; margin-left:20px;">` : ""}
+      </div>
+    `;
 
-        // actions
-        const actions = document.createElement("div");
-        actions.className = "actions small";
-        if (isLoggedIn) {
-          const sellBtn = document.createElement("button");
-          sellBtn.className = "btn-sell btn";
-          sellBtn.textContent = "Sell";
-          sellBtn.onclick = () => {
-            if (!confirm("Mark this piano as Sold and move to Archive?")) return;
-            // copy to archive then remove
-            db.collection("archive").add({...p, timestamp: firebase.firestore.FieldValue.serverTimestamp()})
-              .then(() => db.collection("pianos").doc(doc.id).delete())
-              .catch(err => alert("Error archiving: "+err.message));
-          };
+    document.getElementById(containerId).appendChild(pianoDiv);
+  }
 
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "btn-delete btn";
-          deleteBtn.textContent = "Delete";
-          deleteBtn.onclick = () => {
-            if (!confirm("Delete this piano? This cannot be undone.")) return;
-            db.collection("pianos").doc(doc.id).delete().catch(err => alert("Delete failed: "+err.message));
-          };
+  // Update status
+  function updateStatus(id, newStatus) {
+    if (confirm("Are you sure you want to move this piano to " + newStatus + "?")) {
+      db.collection("pianos").doc(id).update({ status: newStatus });
+    }
+  }
 
-          actions.appendChild(sellBtn);
-          actions.appendChild(deleteBtn);
-        }
+  // Delete
+  function deletePiano(id) {
+    if (confirm("Are you sure you want to delete this piano?")) {
+      db.collection("pianos").doc(id).delete();
+    }
+  }
 
-        left.appendChild(actions);
-
-        const right = document.createElement("div");
-        right.className = "photo";
-        right.innerHTML = p.photo ? `<img src="${p.photo}" alt="Piano photo">` : "";
-
-        card.appendChild(left);
-        card.appendChild(right);
-
-        // notes show more/less
-        if (p.notes && p.notes.length > 120) {
-          const toggle = document.createElement("span");
-          toggle.className = "toggle-notes";
-          toggle.textContent = "[Show More]";
-          toggle.onclick = () => {
-            const np = left.querySelector(".note-preview");
-            if (toggle.textContent === "[Show More]") {
-              np.textContent = p.notes;
-              toggle.textContent = "[Show Less]";
-            } else {
-              np.textContent = (p.notes || "").substring(0,120) + (p.notes.length>120?'...':'');
-              toggle.textContent = "[Show More]";
-            }
-          };
-          left.querySelector(".note-preview").appendChild(toggle);
-        }
-
-        pianoList.appendChild(card);
-      });
-    }, err => {
-      console.error("Inventory listen error", err); // could be permissions
+  // Tabs
+  function showTab(tab) {
+    ["active", "sold", "archive"].forEach(t => {
+      document.getElementById(t+"-list").classList.add("hidden");
+      document.querySelector(`.tab:nth-child(${["active","sold","archive"].indexOf(t)+1})`).classList.remove("active");
     });
+    document.getElementById(tab+"-list").classList.remove("hidden");
+    document.querySelector(`.tab:nth-child(${["active","sold","archive"].indexOf(tab)+1})`).classList.add("active");
   }
 
-  // load archive
-  function loadArchive() {
-    db.collection("archive").orderBy("timestamp","desc").onSnapshot(snapshot => {
-      archiveList.innerHTML = "";
-      snapshot.forEach(doc => {
-        const p = doc.data();
-        const card = document.createElement("div");
-        card.className = "card";
-        const left = document.createElement("div");
-        left.className = "details";
-        left.innerHTML = `
-          <strong>${escapeHtml(p.brand)} ${escapeHtml(p.model)} ${p.modelYear ? '('+escapeHtml(p.modelYear)+')' : ''}</strong>
-          <div class="meta">Serial: ${escapeHtml(p.serial)} — Price: $${escapeHtml(p.price)}</div>
-          <div class="meta">Location: ${escapeHtml(p.location)} — Detailed: ${p.detailed ? escapeHtml(p.detailedDate || 'N/A') : 'No'}</div>
-          <div class="meta">Notes: ${escapeHtml(p.notes || '')}</div>
-        `;
-        const actions = document.createElement("div");
-        actions.className = "actions small";
-        if (isLoggedIn) {
-          const restoreBtn = document.createElement("button");
-          restoreBtn.className = "btn-restore btn";
-          restoreBtn.textContent = "Move Back to Active";
-          restoreBtn.onclick = () => {
-            if (!confirm("Move this piano back to Active?")) return;
-            db.collection("pianos").add({...p, timestamp: firebase.firestore.FieldValue.serverTimestamp()})
-              .then(() => db.collection("archive").doc(doc.id).delete())
-              .catch(err => alert("Restore failed: "+err.message));
-          };
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "btn-delete btn";
-          deleteBtn.textContent = "Delete";
-          deleteBtn.onclick = () => {
-            if (!confirm("Delete this archived piano? This cannot be undone.")) return;
-            db.collection("archive").doc(doc.id).delete().catch(err => alert("Delete failed: "+err.message));
-          };
-          actions.appendChild(restoreBtn);
-          actions.appendChild(deleteBtn);
-        }
-        left.appendChild(actions);
-
-        const right = document.createElement("div");
-        right.className = "photo";
-        right.innerHTML = p.photo ? `<img src="${p.photo}" alt="Piano photo">` : "";
-
-        card.appendChild(left);
-        card.appendChild(right);
-        archiveList.appendChild(card);
-      });
-    }, err => console.error("Archive listen error", err));
-  }
-
-  // helper escape to avoid injecting values into HTML
-  function escapeHtml(str) {
-    if (str == null) return "";
-    return String(str).replace(/[&<>"'`=\/]/g, function(s) {
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'})[s];
+  // Realtime updates
+  db.collection("pianos").orderBy("createdAt","desc").onSnapshot(snapshot => {
+    document.getElementById("active-list").innerHTML = "";
+    document.getElementById("sold-list").innerHTML = "";
+    document.getElementById("archive-list").innerHTML = "";
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.status === "active") renderPiano(doc,"active-list");
+      if (data.status === "sold") renderPiano(doc,"sold-list");
+      if (data.status === "archive") renderPiano(doc,"archive-list");
     });
-  }
-
-  // initial public listeners (so viewers can browse even when not logged in)
-  // We intentionally listen to the pianos collection to populate the active list for anyone
-  db.collection("pianos").orderBy("timestamp","desc").onSnapshot(snapshot => {
-    // only render via loadInventory to keep admin behavior consistent
-    loadInventory();
-  }, () => { /* ignore errors here (permissions) */ });
-
-  // archive snapshot for public viewing (if your rules allow read)
-  db.collection("archive").orderBy("timestamp","desc").onSnapshot(snapshot => {
-    // show nothing until admin toggles archive or in case public view allowed
-    // we still load archiveList inside loadArchive if logged in; this ensures archive is kept updated
-    // but to avoid duplicate listeners we won't render here
-  }, () => { /* ignore */ });
-
-  // ensure archive/listeners are mounted when logged in
-  // auth.onAuthStateChanged already triggers loadInventory/loadArchive when logging in
-
-  </script>
+  });
+</script>
 </body>
 </html>
