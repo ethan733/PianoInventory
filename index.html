@@ -1,368 +1,130 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Piano Inventory — Upgraded</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8">
+  <title>Piano Inventory</title>
   <style>
-    :root{
-      --accent:#0d6efd;
-      --muted:#6c757d;
-      --card-bg:#ffffff;
-      --card-border:#e6e6e6;
-      --success:#198754;
-      --danger:#dc3545;
-      --rounded:8px;
-    }
-    body { font-family: Arial, sans-serif; margin: 18px; background:#f4f6f8; color:#222; }
-    header { display:flex; align-items:center; gap:12px; justify-content:space-between; flex-wrap:wrap; }
-    h1{ margin:0; font-size:20px; }
-    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-
-    /* top bar and alerts */
-    .alert { padding:10px 12px; border-radius:6px; background:#fff3cd; border:1px solid #ffeeba; color:#856404; margin:12px 0; display:flex; gap:12px; align-items:center; }
-    .alert .close { margin-left:auto; cursor:pointer; color:var(--muted); }
-
-    /* layout */
-    .panel { background:var(--card-bg); border:1px solid var(--card-border); padding:12px; border-radius:var(--rounded); box-shadow:0 1px 2px rgba(0,0,0,0.03); margin-top:12px; }
-    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    input[type="text"], input[type="number"], input[type="date"], select, textarea { padding:8px; border:1px solid #ced4da; border-radius:6px; font-size:14px; }
-    textarea { resize:vertical; min-height:60px; }
-    button { padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600; }
-    .btn-primary{ background:var(--accent); color:white; }
-    .btn-success{ background:var(--success); color:white; }
-    .btn-danger{ background:var(--danger); color:white; }
-    .btn-outline{ background:transparent; border:1px solid #ced4da; color:#333; }
-
-    /* table */
-    .table-wrap { overflow:auto; margin-top:12px; }
-    table { width:100%; border-collapse:collapse; min-width:900px; }
-    th, td { padding:10px; text-align:left; border-bottom:1px solid #eee; vertical-align:top; }
-    th { background:#fafafa; position:sticky; top:0; z-index:1; }
-    .small { font-size:13px; color:var(--muted); }
-
-    /* mobile responsive */
-    @media (max-width:900px){
-      table { min-width:700px; }
-    }
-    @media (max-width:640px){
-      header { flex-direction:column; align-items:flex-start; gap:8px; }
-      .controls { width:100%; justify-content:flex-start; }
-    }
-
-    /* image */
-    .thumb { width:80px; height:60px; object-fit:cover; border-radius:6px; border:1px solid #ddd; }
-
-    /* tags */
-    .tag { display:inline-block; padding:4px 8px; border-radius:100px; font-size:12px; background:#e9f2ff; color:var(--accent); }
-    .sold-tag { background:var(--accent); color:white; padding:4px 8px; border-radius:6px; font-size:12px; }
-
-    /* inline editing */
-    .editable { background:#fffbea; }
-
-    /* footer */
-    footer { margin-top:18px; color:var(--muted); font-size:13px; }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f5f5f5; }
+    button { margin: 2px; padding: 5px 10px; }
+    #sellForm { border: 1px solid #aaa; padding: 10px; margin-top: 10px; display: none; }
   </style>
-
-  <!-- Firebase compat libraries (matching your original) -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>Piano Inventory — Upgraded</h1>
-      <div class="small">Manage pianos, images, activity log, auto-archive, low-stock alerts & export CSV.</div>
-    </div>
+  <h1>Piano Inventory</h1>
+  <table id="inventoryTable">
+    <thead>
+      <tr><th>Model</th><th>Brand</th><th>Stock</th><th>Actions</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-    <div class="controls">
-      <div id="userInfo" class="small"></div>
-      <button id="loginBtn" class="btn-outline">Login</button>
-      <button id="logoutBtn" class="btn-outline" style="display:none">Logout</button>
-    </div>
-  </header>
-
-  <!-- Low stock alerts container -->
-  <div id="alertsContainer"></div>
-
-  <!-- Auth / Form Panel -->
-  <div class="panel" id="authPanel">
-    <div class="row">
-      <input type="email" id="email" placeholder="Email" />
-      <input type="password" id="password" placeholder="Password" />
-      <button id="doLogin" class="btn-primary">Sign In</button>
-    </div>
+  <h2>Sell Piano</h2>
+  <div id="sellForm">
+    <label>Sold For ($):</label><br>
+    <input id="soldFor" type="number"><br>
+    <label>Delivery Address:</label><br>
+    <input id="deliveryAddress" type="text"><br>
+    <label>Delivery Date:</label><br>
+    <input id="deliveryDate" type="date"><br>
+    <label>Number of Stairs:</label><br>
+    <input id="stairs" type="number"><br><br>
+    <button onclick="submitSale()">Confirm Sale</button>
+    <button onclick="closeSellForm()">Cancel</button>
   </div>
 
-  <div class="panel" id="formPanel" style="display:none">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-      <strong>Add / Edit Piano</strong>
-      <div class="row">
-        <button id="toggleFormBtn" class="btn-outline">Hide Form</button>
-        <button id="exportCsvBtn" class="btn-outline">Export CSV</button>
-        <button id="showArchiveBtn" class="btn-outline">Show Archive</button>
-      </div>
-    </div>
-
-    <form id="pianoForm" style="margin-top:10px" onsubmit="return false;">
-      <div class="row">
-        <input type="text" id="brand" placeholder="Brand" required />
-        <input type="text" id="model" placeholder="Model" required />
-        <input type="text" id="modelYear" placeholder="Model Year" />
-        <input type="text" id="serial" placeholder="Serial Number" />
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <input type="number" id="price" placeholder="Price" step="0.01" />
-        <input type="number" id="acquisitionCost" placeholder="Acquisition Cost" step="0.01" />
-        <select id="condition">
-          <option value="">Condition (select)</option>
-          <option>New</option>
-          <option>Like New</option>
-          <option>Restored</option>
-          <option>Fair</option>
-          <option>For Parts</option>
-        </select>
-        <input type="date" id="lastServiceDate" />
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <input type="text" id="color" placeholder="Color" />
-        <input type="text" id="length" placeholder="Length" />
-        <select id="location">
-          <option value="Gallery">Gallery</option>
-          <option value="Cartersville">Cartersville</option>
-        </select>
-        <select id="playerSystem">
-          <option value="None">No Player System</option>
-          <option value="PianoDisc">PianoDisc</option>
-          <option value="Spirio">Steinway Spirio</option>
-          <option value="QRS">QRS</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-
-      <div style="margin-top:8px" class="row">
-        <select id="status">
-          <option value="On Floor">On Floor</option>
-          <option value="In Storage">In Storage</option>
-          <option value="Detailed">Detailed</option>
-          <option value="Potential Buyer">Potential Buyer</option>
-          <option value="Sold">Sold</option>
-        </select>
-
-        <input type="file" id="imageFile" accept="image/*" />
-        <img id="imagePreview" class="thumb" src="" alt="" style="display:none"/>
-
-        <input type="text" id="notes" placeholder="Short notes" style="flex:1" />
-        <button id="addBtn" class="btn-success">Add Piano</button>
-      </div>
-    </form>
-  </div>
-
-  <!-- Filters -->
-  <div class="panel" id="filterPanel" style="display:none">
-    <div class="row" style="align-items:center;">
-      <input type="text" id="searchInput" placeholder="Search brand / model / serial / notes..." style="width:320px" />
-      <select id="filterLocation">
-        <option value="">All Locations</option>
-        <option value="Gallery">Gallery</option>
-        <option value="Cartersville">Cartersville</option>
-      </select>
-      <select id="filterStatus">
-        <option value="">All Status</option>
-        <option>On Floor</option>
-        <option>In Storage</option>
-        <option>Detailed</option>
-        <option>Potential Buyer</option>
-        <option>Sold</option>
-      </select>
-      <input type="number" id="lowStockThreshold" min="1" value="2" style="width:90px" title="Low stock threshold" />
-      <div class="small" style="color:var(--muted)">Low stock threshold</div>
-    </div>
-  </div>
-
-  <!-- Inventory table -->
-  <div class="panel" id="inventoryPanel" style="display:none">
-    <div class="table-wrap">
-      <table id="inventoryTable" aria-label="Active Inventory">
-        <thead>
-          <tr>
-            <th>Img</th>
-            <th>Brand / Model</th>
-            <th>Year / Serial</th>
-            <th>Price / Cost</th>
-            <th>Condition / Last Service</th>
-            <th>Location / Player</th>
-            <th>Status</th>
-            <th>Notes</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="inventoryBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Archive -->
-  <div class="panel" id="archivePanel" style="display:none">
-    <h3>Archive (Sold)</h3>
-    <div class="table-wrap">
-      <table id="archiveTable">
-        <thead>
-          <tr>
-            <th>Img</th><th>Brand / Model</th><th>Year / Serial</th><th>Price</th><th>Sold On</th><th>Notes</th>
-          </tr>
-        </thead>
-        <tbody id="archiveBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <footer class="small">
-    <div>Activity is logged in the <code>activity</code> collection. Auto-archive moves sold items to <code>archive</code>.</div>
-  </footer>
+  <h2>Archived Sales</h2>
+  <ul id="salesList"></ul>
 
   <script>
-    // ---------- Firebase config ----------
-    const firebaseConfig = {
-      apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
-      authDomain: "pianoinv.firebaseapp.com",
-      projectId: "pianoinv",
-      storageBucket: "pianoinv.appspot.com",
-      messagingSenderId: "651707888262",
-      appId: "1:651707888262:web:23131a782e31a7bb511707",
-      measurementId: "G-1XQLEV28JZ"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    const storage = firebase.storage();
+    // Initial data
+    let pianos = JSON.parse(localStorage.getItem("pianos")) || [
+      { id: 1, model: "Model S", brand: "Steinway", stock: 3 },
+      { id: 2, model: "C3", brand: "Yamaha", stock: 5 },
+      { id: 3, model: "K-300", brand: "Kawai", stock: 2 }
+    ];
+    let sales = JSON.parse(localStorage.getItem("sales")) || [];
+    let currentPianoId = null;
 
-    // ---------- DOM ----------
-    const doLogin = document.getElementById("doLogin");
-    const loginBtn = document.getElementById("loginBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const userInfo = document.getElementById("userInfo");
-    const authPanel = document.getElementById("authPanel");
-    const formPanel = document.getElementById("formPanel");
-    const filterPanel = document.getElementById("filterPanel");
-    const inventoryPanel = document.getElementById("inventoryPanel");
-    const archivePanel = document.getElementById("archivePanel");
-    const alertsContainer = document.getElementById("alertsContainer");
+    function saveData() {
+      localStorage.setItem("pianos", JSON.stringify(pianos));
+      localStorage.setItem("sales", JSON.stringify(sales));
+    }
 
-    const pianoForm = document.getElementById("pianoForm");
-    const addBtn = document.getElementById("addBtn");
-    const imageFile = document.getElementById("imageFile");
-    const imagePreview = document.getElementById("imagePreview");
-
-    const inventoryBody = document.getElementById("inventoryBody");
-    const archiveBody = document.getElementById("archiveBody");
-
-    const toggleFormBtn = document.getElementById("toggleFormBtn");
-    const showArchiveBtn = document.getElementById("showArchiveBtn");
-    const exportCsvBtn = document.getElementById("exportCsvBtn");
-
-    // filters
-    const searchInput = document.getElementById("searchInput");
-    const filterLocation = document.getElementById("filterLocation");
-    const filterStatus = document.getElementById("filterStatus");
-    const lowStockThresholdInput = document.getElementById("lowStockThreshold");
-
-    // form fields
-    const fields = ["brand","model","modelYear","serial","price","acquisitionCost","condition","lastServiceDate","color","length","location","playerSystem","status","notes"];
-    function getFormData(){
-      const data = {};
-      fields.forEach(f => {
-        data[f] = document.getElementById(f).value || "";
+    function renderInventory() {
+      const tbody = document.querySelector("#inventoryTable tbody");
+      tbody.innerHTML = "";
+      pianos.forEach(p => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${p.model}</td>
+          <td>${p.brand}</td>
+          <td>${p.stock}</td>
+          <td>
+            <button onclick="openSellForm(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>Sell</button>
+            <button onclick="editStock(${p.id})">Edit Stock</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
       });
-      return data;
-    }
-    function resetForm(){
-      pianoForm.reset();
-      imagePreview.style.display = "none";
-      editingId = null;
-      addBtn.textContent = "Add Piano";
-      addBtn.classList.remove("btn-primary");
-      addBtn.classList.add("btn-success");
     }
 
-    // ---------- state ----------
-    let editingId = null; // if set, we're editing
-    let currentUser = null;
-    let lowStockIndex = {}; // { "Brand|Model": count }
-    const lowStockAlerts = {}; // track current alerts shown
+    function renderSales() {
+      const ul = document.getElementById("salesList");
+      ul.innerHTML = "";
+      sales.forEach(s => {
+        const li = document.createElement("li");
+        li.textContent = `${s.brand} ${s.model} sold for $${s.soldFor} to ${s.deliveryAddress} on ${s.deliveryDate} (${s.stairs} stairs)`;
+        ul.appendChild(li);
+      });
+    }
 
-    // ---------- auth handlers ----------
-    doLogin.addEventListener("click", () => {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      auth.signInWithEmailAndPassword(email, password)
-        .catch(err => alert("Login failed: " + err.message));
-    });
+    function openSellForm(id) {
+      currentPianoId = id;
+      document.getElementById("sellForm").style.display = "block";
+    }
 
-    loginBtn.addEventListener("click", () => {
-      // show login modal? reuse the panel for simplicity
-      authPanel.scrollIntoView({behavior:"smooth"});
-    });
+    function closeSellForm() {
+      document.getElementById("sellForm").style.display = "none";
+      currentPianoId = null;
+    }
 
-    logoutBtn.addEventListener("click", () => auth.signOut());
-
-    auth.onAuthStateChanged(user => {
-      currentUser = user;
-      if (user) {
-        userInfo.textContent = `${user.email}`;
-        logoutBtn.style.display = "inline-block";
-        loginBtn.style.display = "none";
-        formPanel.style.display = "block";
-        filterPanel.style.display = "block";
-        inventoryPanel.style.display = "block";
-        authPanel.style.display = "none";
-        loadInventoryRealtime();
-        loadArchiveRealtime();
-        computeLowStock(); // initial compute
-      } else {
-        currentUser = null;
-        userInfo.textContent = "";
-        logoutBtn.style.display = "none";
-        loginBtn.style.display = "inline-block";
-        formPanel.style.display = "none";
-        filterPanel.style.display = "none";
-        inventoryPanel.style.display = "none";
-        archivePanel.style.display = "none";
-        authPanel.style.display = "block";
-        inventoryBody.innerHTML = "";
-        archiveBody.innerHTML = "";
-        alertsContainer.innerHTML = "";
+    function submitSale() {
+      const piano = pianos.find(p => p.id === currentPianoId);
+      if (!piano || piano.stock <= 0) {
+        alert("Piano not available");
+        return;
       }
-    });
+      const sale = {
+        model: piano.model,
+        brand: piano.brand,
+        soldFor: document.getElementById("soldFor").value,
+        deliveryAddress: document.getElementById("deliveryAddress").value,
+        deliveryDate: document.getElementById("deliveryDate").value,
+        stairs: document.getElementById("stairs").value
+      };
+      sales.push(sale);
+      piano.stock -= 1;
+      saveData();
+      renderInventory();
+      renderSales();
+      closeSellForm();
+    }
 
-    // ---------- image upload preview ----------
-    imageFile.addEventListener("change", (e) => {
-      const f = e.target.files[0];
-      if (!f) { imagePreview.style.display = "none"; return; }
-      const url = URL.createObjectURL(f);
-      imagePreview.src = url;
-      imagePreview.style.display = "inline-block";
-    });
+    function editStock(id) {
+      const piano = pianos.find(p => p.id === id);
+      const newStock = prompt("Enter new stock for " + piano.model, piano.stock);
+      if (newStock !== null) {
+        piano.stock = parseInt(newStock, 10) || piano.stock;
+        saveData();
+        renderInventory();
+      }
+    }
 
-    // ---------- add / update piano ----------
-    addBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const data = getFormData();
-      // basic validation
-      if (!data.brand || !data.model) return alert("Brand and Model required.");
-      try{
-        // if image selected, upload and get URL
-        if (imageFile.files && imageFile.files[0]) {
-          const file = imageFile.files[0];
-          const path = `pianos/${Date.now()}_${file.name.replace(/\s/g,'_')}`;
-          const ref = storage.ref().child(path);
-          const snap = await ref.put(file);
-          data.imageUrl = await snap.ref.getDownloadURL();
-        }
-
-        data.timestamp = firebase.firestore.FieldValue.serverTimestamp();
-        // if editing existing doc
-        if (editingId) {
-          const docRef = db.collect
+    renderInventory();
+    renderSales();
+  </script>
+</body>
+</html>
