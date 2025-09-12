@@ -12,12 +12,14 @@
     .hidden { display: none; }
     .tab { cursor: pointer; padding: 10px; display: inline-block; border: 1px solid #ccc; border-bottom: none; }
     .tab.active { background: #eee; font-weight: bold; }
-    .tab-content { border: 1px solid #ccc; padding: 15px; }
+    .tab-content { border: 1px solid #ccc; padding: 15px; margin-top: -1px; }
     .button { padding: 5px 10px; margin: 2px; border-radius: 4px; cursor: pointer; }
     .btn-add { background: green; color: white; }
     .btn-delete { background: red; color: white; }
     .btn-sold { background: blue; color: white; }
     .btn-restore { background: orange; color: white; }
+    form label { display: block; margin-top: 8px; }
+    form input, form select, form textarea { width: 100%; padding: 5px; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -30,9 +32,10 @@
   </div>
 
   <!-- Tabs -->
-  <div>
+  <div id="tabs">
     <div class="tab active" data-tab="active">Active</div>
     <div class="tab" data-tab="archive">Archive</div>
+    <div class="tab hidden" data-tab="add">Add Piano</div>
   </div>
 
   <!-- Active Tab -->
@@ -45,6 +48,37 @@
   <div id="archive" class="tab-content hidden">
     <h2>Archived Pianos</h2>
     <div id="archiveList"></div>
+  </div>
+
+  <!-- Add Piano Tab -->
+  <div id="add" class="tab-content hidden">
+    <h2>Add New Piano</h2>
+    <form id="addPianoForm">
+      <label>Brand: <input type="text" id="brand" required></label>
+      <label>Model: <input type="text" id="model"></label>
+      <label>Serial: <input type="text" id="serial"></label>
+      <label>Price: <input type="number" id="price"></label>
+      <label>Year: <input type="number" id="year"></label>
+      <label>Color: <input type="text" id="color"></label>
+      <label>Length: <input type="text" id="length"></label>
+      <label>Location:
+        <select id="location">
+          <option value="Gallery">Gallery</option>
+          <option value="Cartersville">Cartersville</option>
+        </select>
+      </label>
+      <label>Notes:
+        <textarea id="notes"></textarea>
+      </label>
+      <label>Player System:
+        <select id="playerSystem">
+          <option value="No">No</option>
+          <option value="Yes">Yes</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="detailed"> Detailed</label>
+      <button type="submit" class="button btn-add">Add Piano</button>
+    </form>
   </div>
 
   <script>
@@ -76,7 +110,8 @@
       isLoggedIn = !!user;
       document.getElementById("loginBtn").classList.toggle("hidden", isLoggedIn);
       document.getElementById("logoutBtn").classList.toggle("hidden", !isLoggedIn);
-      renderInventory(); // refresh UI
+      document.querySelector('[data-tab="add"]').classList.toggle("hidden", !isLoggedIn);
+      renderInventory();
     });
 
     // --- Tab Switching ---
@@ -100,7 +135,7 @@
       snapshot.forEach(doc => {
         const piano = doc.data();
         const div = document.createElement("div");
-        div.textContent = `${piano.brand} ${piano.model || ""}`;
+        div.textContent = `${piano.brand} ${piano.model || ""} (${piano.year || ""})`;
 
         if (isLoggedIn) {
           if (piano.status === "active") {
@@ -148,6 +183,28 @@
     }
 
     db.collection("pianos").onSnapshot(renderInventory);
+
+    // --- Add Piano Form ---
+    document.getElementById("addPianoForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await db.collection("pianos").add({
+        brand: document.getElementById("brand").value,
+        model: document.getElementById("model").value,
+        serial: document.getElementById("serial").value,
+        price: document.getElementById("price").value,
+        year: document.getElementById("year").value,
+        color: document.getElementById("color").value,
+        length: document.getElementById("length").value,
+        location: document.getElementById("location").value,
+        notes: document.getElementById("notes").value,
+        playerSystem: document.getElementById("playerSystem").value,
+        detailed: document.getElementById("detailed").checked,
+        status: "active",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      e.target.reset();
+      alert("Piano added!");
+    });
   </script>
 </body>
 </html>
