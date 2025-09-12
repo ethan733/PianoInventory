@@ -200,9 +200,12 @@
           const sellBtn = div.querySelector(".sell-btn");
           sellBtn.addEventListener("click", () => {
             if (confirm("Mark this piano as Sold and move to archive?")) {
-              db.collection("archive").add(piano).then(() => {
+              db.collection("archive").add({
+                ...piano,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+              }).then(() => {
                 db.collection("pianos").doc(doc.id).delete();
-              });
+              }).catch(err => alert("Error moving to archive: " + err.message));
             }
           });
           // Delete button
