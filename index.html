@@ -18,7 +18,7 @@
     .btn-sell { background: blue; color: white; }
     .btn-archive { background: gray; color: white; }
     .btn-add { background: green; color: white; }
-    .btn-edit { background: orange; color: white; }
+    .filters { margin: 15px 0; padding: 10px; border: 1px solid #ddd; }
   </style>
 </head>
 <body>
@@ -40,6 +40,37 @@
   <span class="tab" onclick="showTab('archive')">Archive</span>
 </div>
 
+<!-- Filters + Search -->
+<div class="filters">
+  <div style="margin-bottom:10px;">
+    <input 
+      type="text" 
+      id="searchInput" 
+      placeholder="Search pianos..." 
+      style="width:250px; padding:5px;" 
+      oninput="applyFilters()">
+  </div>
+  <label>Brand: 
+    <select id="brandFilter" onchange="applyFilters()">
+      <option value="">All</option>
+      <option value="Yamaha">Yamaha</option>
+      <option value="Steinway">Steinway</option>
+      <option value="Kawai">Kawai</option>
+      <option value="Baldwin">Baldwin</option>
+    </select>
+  </label>
+  <label>Min Cost: <input type="number" id="minCost" onchange="applyFilters()"></label>
+  <label>Max Cost: <input type="number" id="maxCost" onchange="applyFilters()"></label>
+  <label>Size: 
+    <select id="sizeFilter" onchange="applyFilters()">
+      <option value="">All</option>
+      <option value="Baby Grand">Baby Grand</option>
+      <option value="Concert Grand">Concert Grand</option>
+      <option value="Upright">Upright</option>
+    </select>
+  </label>
+</div>
+
 <!-- Add Piano Form -->
 <div id="form-section" class="hidden">
   <h2>Add Piano</h2>
@@ -49,6 +80,12 @@
     <input type="number" id="year" placeholder="Year"><br>
     <input type="text" id="color" placeholder="Color"><br>
     <input type="text" id="length" placeholder="Length"><br>
+    <input type="number" id="cost" placeholder="Cost"><br>
+    <select id="size">
+      <option value="Baby Grand">Baby Grand</option>
+      <option value="Concert Grand">Concert Grand</option>
+      <option value="Upright">Upright</option>
+    </select><br>
     <select id="location">
       <option value="Gallery">Gallery</option>
       <option value="Cartersville">Cartersville</option>
@@ -68,12 +105,12 @@
 <div id="archive-list" class="hidden"></div>
 
 <script>
-  // Firebase config (FIXED storageBucket)
+  // Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
     authDomain: "pianoinv.firebaseapp.com",
     projectId: "pianoinv",
-    storageBucket: "pianoinv.firebasestorage.app",
+    storageBucket: "pianoinv.appspot.com",
     messagingSenderId: "651707888262",
     appId: "1:651707888262:web:23131a782e31a7bb511707",
     measurementId: "G-1XQLEV28JZ"
@@ -83,6 +120,8 @@
   const storage = firebase.storage();
 
   let currentUser = null;
+  let allPianos = [];
+  let filteredPianos = [];
 
   // Auth
   firebase.auth().onAuthStateChanged(user => {
@@ -123,6 +162,8 @@
       year: document.getElementById("year").value,
       color: document.getElementById("color").value,
       length: document.getElementById("length").value,
+      size: document.getElementById("size").value,
+      cost: parseFloat(document.getElementById("cost").value) || 0,
       location: document.getElementById("location").value,
       playerSystem: document.getElementById("playerSystem").checked,
       detailed: document.getElementById("detailed").checked,
@@ -136,94 +177,71 @@
   });
 
   // Render piano
-  function renderPiano(doc, containerId) {
-    const data = doc.data();
-    const pianoDiv = document.createElement("div");
-    pianoDiv.classList.add("piano-item");
+  function renderPianos(pianos) {
+    document.getElementById("active-list").innerHTML = "";
+    document.getElementById("sold-list").innerHTML = "";
+    document.getElementById("archive-list").innerHTML = "";
 
-    pianoDiv.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div style="flex: 1;">
-          <p><strong>Brand:</strong> ${data.brand}</p>
-          <p><strong>Model:</strong> ${data.model}</p>
-          <p><strong>Year:</strong> ${data.year}</p>
-          <p><strong>Color:</strong> ${data.color}</p>
-          <p><strong>Length:</strong> ${data.length}</p>
-          <p><strong>Location:</strong> ${data.location}</p>
-          <p><strong>Player System:</strong> ${data.playerSystem ? "Yes" : "No"}</p>
-          <p><strong>Detailed:</strong> ${data.detailed ? "Yes (" + data.detailDate + ")" : "No"}</p>
-          <p><strong>Notes:</strong> ${data.notes || ""}</p>
-          ${currentUser ? `
-            <button onclick="updateStatus('${doc.id}','sold')" class="btn-sell">Sell</button>
-            <button onclick="updateStatus('${doc.id}','archive')" class="btn-archive">Archive</button>
-            <button onclick="deletePiano('${doc.id}')" class="btn-delete">Delete</button>
-            <button onclick="editPiano('${doc.id}')" class="btn-edit">Edit</button>
-          ` : ""}
+    pianos.forEach(doc => {
+      const data = doc.data();
+      const pianoDiv = document.createElement("div");
+      pianoDiv.classList.add("piano-item");
+
+      pianoDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div style="flex: 1;">
+            <p><strong>Brand:</strong> ${data.brand}</p>
+            <p><strong>Model:</strong> ${data.model}</p>
+            <p><strong>Year:</strong> ${data.year}</p>
+            <p><strong>Color:</strong> ${data.color}</p>
+            <p><strong>Length:</strong> ${data.length}</p>
+            <p><strong>Size:</strong> ${data.size || ""}</p>
+            <p><strong>Cost:</strong> $${data.cost || 0}</p>
+            <p><strong>Location:</strong> ${data.location}</p>
+            <p><strong>Player System:</strong> ${data.playerSystem ? "Yes" : "No"}</p>
+            <p><strong>Detailed:</strong> ${data.detailed ? "Yes (" + data.detailDate + ")" : "No"}</p>
+            <p><strong>Notes:</strong> ${data.notes || ""}</p>
+            ${currentUser ? `
+              <button onclick="updateStatus('${doc.id}','sold')" class="btn-sell">Sell</button>
+              <button onclick="updateStatus('${doc.id}','archive')" class="btn-archive">Archive</button>
+              <button onclick="deletePiano('${doc.id}')" class="btn-delete">Delete</button>
+            ` : ""}
+          </div>
+          ${data.photoURL ? `<img src="${data.photoURL}" alt="Piano Photo" style="max-width:200px; max-height:150px; object-fit:cover; margin-left:20px;">` : ""}
         </div>
-        ${data.photoURL ? `<img src="${data.photoURL}" alt="Piano Photo" style="max-width:200px; max-height:150px; object-fit:cover; margin-left:20px;">` : ""}
-      </div>
-      <div id="edit-${doc.id}" class="hidden"></div>
-    `;
-
-    document.getElementById(containerId).appendChild(pianoDiv);
-  }
-
-  // Edit piano
-  function editPiano(id) {
-    const editDiv = document.getElementById(`edit-${id}`);
-    if (!editDiv) return;
-    if (!editDiv.classList.contains("hidden")) {
-      editDiv.classList.add("hidden");
-      editDiv.innerHTML = "";
-      return;
-    }
-
-    db.collection("pianos").doc(id).get().then(doc => {
-      const d = doc.data();
-      editDiv.classList.remove("hidden");
-      editDiv.innerHTML = `
-        <form onsubmit="saveEdit(event, '${id}')">
-          <input type="text" id="edit-brand-${id}" value="${d.brand}"><br>
-          <input type="text" id="edit-model-${id}" value="${d.model}"><br>
-          <input type="number" id="edit-year-${id}" value="${d.year}"><br>
-          <input type="text" id="edit-color-${id}" value="${d.color}"><br>
-          <input type="text" id="edit-length-${id}" value="${d.length}"><br>
-          <input type="text" id="edit-location-${id}" value="${d.location}"><br>
-          <label>Player System <input type="checkbox" id="edit-playerSystem-${id}" ${d.playerSystem ? "checked" : ""}></label><br>
-          <label>Detailed <input type="checkbox" id="edit-detailed-${id}" ${d.detailed ? "checked" : ""}></label><br>
-          <input type="date" id="edit-detailDate-${id}" value="${d.detailDate || ""}"><br>
-          <textarea id="edit-notes-${id}">${d.notes || ""}</textarea><br>
-          <input type="file" id="edit-photo-${id}"><br>
-          <button type="submit" class="btn-add">Save</button>
-        </form>
       `;
+
+      if (data.status === "active") document.getElementById("active-list").appendChild(pianoDiv);
+      if (data.status === "sold") document.getElementById("sold-list").appendChild(pianoDiv);
+      if (data.status === "archive") document.getElementById("archive-list").appendChild(pianoDiv);
     });
   }
 
-  async function saveEdit(e, id) {
-    e.preventDefault();
-    const docRef = db.collection("pianos").doc(id);
-    const updates = {
-      brand: document.getElementById(`edit-brand-${id}`).value,
-      model: document.getElementById(`edit-model-${id}`).value,
-      year: document.getElementById(`edit-year-${id}`).value,
-      color: document.getElementById(`edit-color-${id}`).value,
-      length: document.getElementById(`edit-length-${id}`).value,
-      location: document.getElementById(`edit-location-${id}`).value,
-      playerSystem: document.getElementById(`edit-playerSystem-${id}`).checked,
-      detailed: document.getElementById(`edit-detailed-${id}`).checked,
-      detailDate: document.getElementById(`edit-detailDate-${id}`).value,
-      notes: document.getElementById(`edit-notes-${id}`).value
-    };
+  // Filters
+  function applyFilters() {
+    const brand = document.getElementById("brandFilter").value;
+    const minCost = parseFloat(document.getElementById("minCost").value) || 0;
+    const maxCost = parseFloat(document.getElementById("maxCost").value) || Infinity;
+    const size = document.getElementById("sizeFilter").value;
+    const searchText = document.getElementById("searchInput").value.toLowerCase();
 
-    const newPhoto = document.getElementById(`edit-photo-${id}`).files[0];
-    if (newPhoto) {
-      const storageRef = storage.ref("piano_photos/" + Date.now() + "_" + newPhoto.name);
-      await storageRef.put(newPhoto);
-      updates.photoURL = await storageRef.getDownloadURL();
-    }
+    filteredPianos = allPianos.filter(doc => {
+      const piano = doc.data();
+      const matchesBrand = !brand || piano.brand === brand;
+      const matchesCost = piano.cost >= minCost && piano.cost <= maxCost;
+      const matchesSize = !size || piano.size === size;
 
-    await docRef.update(updates);
+      const matchesSearch = !searchText ||
+        (piano.brand && piano.brand.toLowerCase().includes(searchText)) ||
+        (piano.model && piano.model.toLowerCase().includes(searchText)) ||
+        (piano.color && piano.color.toLowerCase().includes(searchText)) ||
+        (piano.size && piano.size.toLowerCase().includes(searchText)) ||
+        (piano.notes && piano.notes.toLowerCase().includes(searchText));
+
+      return matchesBrand && matchesCost && matchesSize && matchesSearch;
+    });
+
+    renderPianos(filteredPianos);
   }
 
   // Update status
@@ -252,15 +270,8 @@
 
   // Realtime updates
   db.collection("pianos").orderBy("createdAt","desc").onSnapshot(snapshot => {
-    document.getElementById("active-list").innerHTML = "";
-    document.getElementById("sold-list").innerHTML = "";
-    document.getElementById("archive-list").innerHTML = "";
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.status === "active") renderPiano(doc,"active-list");
-      if (data.status === "sold") renderPiano(doc,"sold-list");
-      if (data.status === "archive") renderPiano(doc,"archive-list");
-    });
+    allPianos = snapshot.docs;
+    applyFilters(); // always apply filters when data updates
   });
 </script>
 </body>
