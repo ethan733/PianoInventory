@@ -18,6 +18,7 @@
     .btn-sell { background: blue; color: white; }
     .btn-archive { background: gray; color: white; }
     .btn-add { background: green; color: white; }
+    .btn-edit { background: orange; color: white; }
   </style>
 </head>
 <body>
@@ -61,47 +62,18 @@
   </form>
 </div>
 
-<!-- Edit Piano Form -->
-<div id="edit-section" class="hidden">
-  <h2>Edit Piano</h2>
-  <form id="editPianoForm">
-    <input type="hidden" id="edit-id">
-    <input type="hidden" id="edit-old-photo-url">
-    <input type="text" id="edit-brand" placeholder="Brand" required><br>
-    <input type="text" id="edit-model" placeholder="Model"><br>
-    <input type="number" id="edit-year" placeholder="Year"><br>
-    <input type="text" id="edit-color" placeholder="Color"><br>
-    <input type="text" id="edit-length" placeholder="Length"><br>
-    <select id="edit-location">
-      <option value="Gallery">Gallery</option>
-      <option value="Cartersville">Cartersville</option>
-    </select><br>
-    <label>Player System <input type="checkbox" id="edit-playerSystem"></label><br>
-    <label>Detailed <input type="checkbox" id="edit-detailed"></label><br>
-    <input type="date" id="edit-detailDate"><br>
-    <textarea id="edit-notes" placeholder="Notes"></textarea><br>
-
-    <!-- ✅ Current photo preview -->
-    <img id="edit-photo-preview" src="" alt="Current Photo" style="max-width:200px; max-height:150px; object-fit:cover; display:none; margin-bottom:10px;"><br>
-
-    <input type="file" id="edit-photo"><br>
-    <button type="submit" class="btn-add">Save Changes</button>
-    <button type="button" onclick="cancelEdit()">Cancel</button>
-  </form>
-</div>
-
 <!-- Listings -->
 <div id="active-list"></div>
 <div id="sold-list" class="hidden"></div>
 <div id="archive-list" class="hidden"></div>
 
 <script>
-  // Firebase config
+  // Firebase config (FIXED storageBucket)
   const firebaseConfig = {
     apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
     authDomain: "pianoinv.firebaseapp.com",
     projectId: "pianoinv",
-    storageBucket: "pianoinv.appspot.com",
+    storageBucket: "pianoinv.firebasestorage.app",
     messagingSenderId: "651707888262",
     appId: "1:651707888262:web:23131a782e31a7bb511707",
     measurementId: "G-1XQLEV28JZ"
@@ -163,97 +135,6 @@
     e.target.reset();
   });
 
-  // Edit piano
-  function editPiano(id) {
-    db.collection("pianos").doc(id).get().then(doc => {
-      if (doc.exists) {
-        const data = doc.data();
-        document.getElementById("edit-id").value = id;
-        document.getElementById("edit-old-photo-url").value = data.photoURL || "";
-        document.getElementById("edit-brand").value = data.brand || "";
-        document.getElementById("edit-model").value = data.model || "";
-        document.getElementById("edit-year").value = data.year || "";
-        document.getElementById("edit-color").value = data.color || "";
-        document.getElementById("edit-length").value = data.length || "";
-        document.getElementById("edit-location").value = data.location || "Gallery";
-        document.getElementById("edit-playerSystem").checked = !!data.playerSystem;
-        document.getElementById("edit-detailed").checked = !!data.detailed;
-        document.getElementById("edit-detailDate").value = data.detailDate || "";
-        document.getElementById("edit-notes").value = data.notes || "";
-
-        const preview = document.getElementById("edit-photo-preview");
-        if (data.photoURL) {
-          preview.src = data.photoURL;
-          preview.style.display = "block";
-        } else {
-          preview.style.display = "none";
-        }
-
-        document.getElementById("edit-section").classList.remove("hidden");
-        document.getElementById("form-section").classList.add("hidden");
-      }
-    });
-  }
-
-  // Save edits
-  document.getElementById("editPianoForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const id = document.getElementById("edit-id").value;
-    const oldPhotoURL = document.getElementById("edit-old-photo-url").value;
-    const photoFile = document.getElementById("edit-photo").files[0];
-    let photoURL = oldPhotoURL;
-
-    if (photoFile) {
-      // Upload new photo
-      const storageRef = storage.ref("piano_photos/" + Date.now() + "_" + photoFile.name);
-      await storageRef.put(photoFile);
-      photoURL = await storageRef.getDownloadURL();
-
-      // Delete old photo if exists
-      if (oldPhotoURL) {
-        try {
-          const oldRef = storage.refFromURL(oldPhotoURL);
-          await oldRef.delete();
-        } catch (err) {
-          console.warn("Failed to delete old photo:", err);
-        }
-      }
-    }
-
-    await db.collection("pianos").doc(id).update({
-      brand: document.getElementById("edit-brand").value,
-      model: document.getElementById("edit-model").value,
-      year: document.getElementById("edit-year").value,
-      color: document.getElementById("edit-color").value,
-      length: document.getElementById("edit-length").value,
-      location: document.getElementById("edit-location").value,
-      playerSystem: document.getElementById("edit-playerSystem").checked,
-      detailed: document.getElementById("edit-detailed").checked,
-      detailDate: document.getElementById("edit-detailDate").value,
-      notes: document.getElementById("edit-notes").value,
-      photoURL: photoURL
-    });
-
-    e.target.reset();
-    cancelEdit();
-  });
-
-  function cancelEdit() {
-    document.getElementById("edit-section").classList.add("hidden");
-    document.getElementById("form-section").classList.remove("hidden");
-    document.getElementById("edit-photo-preview").style.display = "none";
-  }
-
-  // ✅ Preview new image before saving
-  document.getElementById("edit-photo").addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const preview = document.getElementById("edit-photo-preview");
-      preview.src = URL.createObjectURL(file);
-      preview.style.display = "block";
-    }
-  });
-
   // Render piano
   function renderPiano(doc, containerId) {
     const data = doc.data();
@@ -276,14 +157,73 @@
             <button onclick="updateStatus('${doc.id}','sold')" class="btn-sell">Sell</button>
             <button onclick="updateStatus('${doc.id}','archive')" class="btn-archive">Archive</button>
             <button onclick="deletePiano('${doc.id}')" class="btn-delete">Delete</button>
-            <button onclick="editPiano('${doc.id}')" class="btn-add">Edit</button>
+            <button onclick="editPiano('${doc.id}')" class="btn-edit">Edit</button>
           ` : ""}
         </div>
         ${data.photoURL ? `<img src="${data.photoURL}" alt="Piano Photo" style="max-width:200px; max-height:150px; object-fit:cover; margin-left:20px;">` : ""}
       </div>
+      <div id="edit-${doc.id}" class="hidden"></div>
     `;
 
     document.getElementById(containerId).appendChild(pianoDiv);
+  }
+
+  // Edit piano
+  function editPiano(id) {
+    const editDiv = document.getElementById(`edit-${id}`);
+    if (!editDiv) return;
+    if (!editDiv.classList.contains("hidden")) {
+      editDiv.classList.add("hidden");
+      editDiv.innerHTML = "";
+      return;
+    }
+
+    db.collection("pianos").doc(id).get().then(doc => {
+      const d = doc.data();
+      editDiv.classList.remove("hidden");
+      editDiv.innerHTML = `
+        <form onsubmit="saveEdit(event, '${id}')">
+          <input type="text" id="edit-brand-${id}" value="${d.brand}"><br>
+          <input type="text" id="edit-model-${id}" value="${d.model}"><br>
+          <input type="number" id="edit-year-${id}" value="${d.year}"><br>
+          <input type="text" id="edit-color-${id}" value="${d.color}"><br>
+          <input type="text" id="edit-length-${id}" value="${d.length}"><br>
+          <input type="text" id="edit-location-${id}" value="${d.location}"><br>
+          <label>Player System <input type="checkbox" id="edit-playerSystem-${id}" ${d.playerSystem ? "checked" : ""}></label><br>
+          <label>Detailed <input type="checkbox" id="edit-detailed-${id}" ${d.detailed ? "checked" : ""}></label><br>
+          <input type="date" id="edit-detailDate-${id}" value="${d.detailDate || ""}"><br>
+          <textarea id="edit-notes-${id}">${d.notes || ""}</textarea><br>
+          <input type="file" id="edit-photo-${id}"><br>
+          <button type="submit" class="btn-add">Save</button>
+        </form>
+      `;
+    });
+  }
+
+  async function saveEdit(e, id) {
+    e.preventDefault();
+    const docRef = db.collection("pianos").doc(id);
+    const updates = {
+      brand: document.getElementById(`edit-brand-${id}`).value,
+      model: document.getElementById(`edit-model-${id}`).value,
+      year: document.getElementById(`edit-year-${id}`).value,
+      color: document.getElementById(`edit-color-${id}`).value,
+      length: document.getElementById(`edit-length-${id}`).value,
+      location: document.getElementById(`edit-location-${id}`).value,
+      playerSystem: document.getElementById(`edit-playerSystem-${id}`).checked,
+      detailed: document.getElementById(`edit-detailed-${id}`).checked,
+      detailDate: document.getElementById(`edit-detailDate-${id}`).value,
+      notes: document.getElementById(`edit-notes-${id}`).value
+    };
+
+    const newPhoto = document.getElementById(`edit-photo-${id}`).files[0];
+    if (newPhoto) {
+      const storageRef = storage.ref("piano_photos/" + Date.now() + "_" + newPhoto.name);
+      await storageRef.put(newPhoto);
+      updates.photoURL = await storageRef.getDownloadURL();
+    }
+
+    await docRef.update(updates);
   }
 
   // Update status
