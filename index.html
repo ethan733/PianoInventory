@@ -3,217 +3,265 @@
 <head>
   <meta charset="UTF-8">
   <title>Piano Inventory</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    .hidden {
-      display: none;
-    }
-    details {
-      margin: 5px 0;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      background: #fafafa;
-    }
-    details summary {
-      cursor: pointer;
-      font-weight: bold;
-      outline: none;
-    }
-    .piano-card {
-      margin: 5px 0;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      background: #fff;
-    }
-  </style>
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .hidden { display: none; }
+    .tab { cursor: pointer; padding: 10px; margin-right: 5px; border: 1px solid #ccc; display: inline-block; }
+    .tab.active { background: #eee; font-weight: bold; }
+    .piano-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    button { margin: 5px; padding: 5px 10px; }
+    .btn-delete { background: red; color: white; }
+    .btn-sell { background: blue; color: white; }
+    .btn-archive { background: gray; color: white; }
+    .btn-add { background: green; color: white; }
+    .btn-edit { background: orange; color: white; }
+  </style>
 </head>
 <body>
 
-  <h1>Piano Inventory</h1>
+<h1>Piano Inventory</h1>
 
-  <!-- Toggle Filter -->
-  <button id="toggleFilterBtn" style="margin:10px 0; padding:8px 16px; background:#444; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-    🔍 Search / Filter
-  </button>
+<!-- Login -->
+<div id="login-section">
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <button onclick="logout()" class="hidden" id="logoutBtn">Logout</button>
+</div>
 
-  <!-- Search Filters (collapsible) -->
-  <div id="filter-section" class="hidden" style="margin:20px 0; padding:15px; border:1px solid #ccc; border-radius:10px; background:#f9f9f9;">
-    <h3 style="margin-top:0;">Filter Pianos</h3>
-    
-    <label>Brand(s):<br>
-      <select id="filterBrand" multiple size="4" style="width:200px; margin:5px 15px 10px 0; border-radius:6px; padding:5px;">
-      </select>
-    </label>
+<!-- Tabs -->
+<div>
+  <span class="tab active" onclick="showTab('active')">Active</span>
+  <span class="tab" onclick="showTab('sold')">Sold</span>
+  <span class="tab" onclick="showTab('archive')">Archive</span>
+</div>
 
-    <label>Length:<br>
-      <select id="filterLength" style="width:200px; margin:5px 15px 10px 0; border-radius:6px; padding:5px;">
-        <option value="">All</option>
-      </select>
-    </label>
+<!-- Add Piano Form -->
+<div id="form-section" class="hidden">
+  <h2>Add Piano</h2>
+  <form id="pianoForm">
+    <input type="text" id="brand" placeholder="Brand" required><br>
+    <input type="text" id="model" placeholder="Model"><br>
+    <input type="number" id="year" placeholder="Year"><br>
+    <input type="text" id="color" placeholder="Color"><br>
+    <input type="text" id="length" placeholder="Length"><br>
+    <select id="location">
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
+    </select><br>
+    <label>Player System <input type="checkbox" id="playerSystem"></label><br>
+    <label>Detailed <input type="checkbox" id="detailed"></label><br>
+    <input type="date" id="detailDate"><br>
+    <textarea id="notes" placeholder="Notes"></textarea><br>
+    <input type="file" id="photo"><br>
+    <button type="submit" class="btn-add">Add Piano</button>
+  </form>
+</div>
 
-    <label>Cost:<br>
-      <input type="number" id="filterMinCost" placeholder="Min" style="width:90px; margin-right:5px; border-radius:6px; padding:5px;">
-      <input type="number" id="filterMaxCost" placeholder="Max" style="width:90px; border-radius:6px; padding:5px;">
-    </label>
+<!-- Listings -->
+<div id="active-list"></div>
+<div id="sold-list" class="hidden"></div>
+<div id="archive-list" class="hidden"></div>
 
-    <div style="margin-top:10px;">
-      <button onclick="resetFilters()" style="padding:6px 14px; border:none; border-radius:6px; background:#888; color:#fff; cursor:pointer;">
-        Reset
-      </button>
-    </div>
-  </div>
+<script>
+  // Firebase config (FIXED storageBucket)
+  const firebaseConfig = {
+    apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
+    authDomain: "pianoinv.firebaseapp.com",
+    projectId: "pianoinv",
+    storageBucket: "pianoinv.firebasestorage.app",
+    messagingSenderId: "651707888262",
+    appId: "1:651707888262:web:23131a782e31a7bb511707",
+    measurementId: "G-1XQLEV28JZ"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const storage = firebase.storage();
 
-  <!-- Filter Summary -->
-  <div id="filterSummary" style="margin:10px 0; font-style:italic; color:#444;">
-    Showing all pianos
-  </div>
+  let currentUser = null;
 
-  <!-- Tabs -->
-  <details open>
-    <summary>🎹 Active</summary>
-    <div id="active-list"></div>
-  </details>
+  // Auth
+  firebase.auth().onAuthStateChanged(user => {
+    if (user) {
+      currentUser = user;
+      document.getElementById("form-section").classList.remove("hidden");
+      document.getElementById("logoutBtn").classList.remove("hidden");
+    } else {
+      currentUser = null;
+      document.getElementById("form-section").classList.add("hidden");
+      document.getElementById("logoutBtn").classList.add("hidden");
+    }
+  });
 
-  <details>
-    <summary>✅ Sold</summary>
-    <div id="sold-list"></div>
-  </details>
+  function login() {
+    const email = document.getElementById("email").value;
+    const pass = document.getElementById("password").value;
+    firebase.auth().signInWithEmailAndPassword(email, pass)
+      .catch(err => alert(err.message));
+  }
+  function logout() {
+    firebase.auth().signOut();
+  }
 
-  <script>
-    // 🔧 Replace with your Firebase project config
-    const firebaseConfig = {
-      apiKey: "YOUR_KEY",
-      authDomain: "YOUR_DOMAIN",
-      projectId: "YOUR_PROJECT",
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    let allPianos = [];
-
-    // Toggle filter visibility
-    document.getElementById("toggleFilterBtn").addEventListener("click", () => {
-      document.getElementById("filter-section").classList.toggle("hidden");
+  // Add piano
+  document.getElementById("pianoForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    let photoURL = "";
+    const photoFile = document.getElementById("photo").files[0];
+    if (photoFile) {
+      const storageRef = storage.ref("piano_photos/" + Date.now() + "_" + photoFile.name);
+      await storageRef.put(photoFile);
+      photoURL = await storageRef.getDownloadURL();
+    }
+    await db.collection("pianos").add({
+      brand: document.getElementById("brand").value,
+      model: document.getElementById("model").value,
+      year: document.getElementById("year").value,
+      color: document.getElementById("color").value,
+      length: document.getElementById("length").value,
+      location: document.getElementById("location").value,
+      playerSystem: document.getElementById("playerSystem").checked,
+      detailed: document.getElementById("detailed").checked,
+      detailDate: document.getElementById("detailDate").value,
+      notes: document.getElementById("notes").value,
+      photoURL: photoURL,
+      status: "active",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    e.target.reset();
+  });
 
-    // Populate dropdowns dynamically
-    function populateDropdowns() {
-      const brands = new Set();
-      const lengths = new Set();
+  // Render piano
+  function renderPiano(doc, containerId) {
+    const data = doc.data();
+    const pianoDiv = document.createElement("div");
+    pianoDiv.classList.add("piano-item");
 
-      allPianos.forEach(doc => {
-        const d = doc.data();
-        if (d.brand) brands.add(d.brand);
-        if (d.length) lengths.add(d.length);
-      });
+    pianoDiv.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="flex: 1;">
+          <p><strong>Brand:</strong> ${data.brand}</p>
+          <p><strong>Model:</strong> ${data.model}</p>
+          <p><strong>Year:</strong> ${data.year}</p>
+          <p><strong>Color:</strong> ${data.color}</p>
+          <p><strong>Length:</strong> ${data.length}</p>
+          <p><strong>Location:</strong> ${data.location}</p>
+          <p><strong>Player System:</strong> ${data.playerSystem ? "Yes" : "No"}</p>
+          <p><strong>Detailed:</strong> ${data.detailed ? "Yes (" + data.detailDate + ")" : "No"}</p>
+          <p><strong>Notes:</strong> ${data.notes || ""}</p>
+          ${currentUser ? `
+            <button onclick="updateStatus('${doc.id}','sold')" class="btn-sell">Sell</button>
+            <button onclick="updateStatus('${doc.id}','archive')" class="btn-archive">Archive</button>
+            <button onclick="deletePiano('${doc.id}')" class="btn-delete">Delete</button>
+            <button onclick="editPiano('${doc.id}')" class="btn-edit">Edit</button>
+          ` : ""}
+        </div>
+        ${data.photoURL ? `<img src="${data.photoURL}" alt="Piano Photo" style="max-width:200px; max-height:150px; object-fit:cover; margin-left:20px;">` : ""}
+      </div>
+      <div id="edit-${doc.id}" class="hidden"></div>
+    `;
 
-      const brandSelect = document.getElementById("filterBrand");
-      const lengthSelect = document.getElementById("filterLength");
+    document.getElementById(containerId).appendChild(pianoDiv);
+  }
 
-      brandSelect.innerHTML = "";
-      lengthSelect.innerHTML = "<option value=''>All</option>";
-
-      [...brands].sort().forEach(b => {
-        brandSelect.innerHTML += `<option value="${b.toLowerCase()}">${b}</option>`;
-      });
-      [...lengths].sort().forEach(l => {
-        lengthSelect.innerHTML += `<option value="${l.toLowerCase()}">${l}</option>`;
-      });
+  // Edit piano
+  function editPiano(id) {
+    const editDiv = document.getElementById(`edit-${id}`);
+    if (!editDiv) return;
+    if (!editDiv.classList.contains("hidden")) {
+      editDiv.classList.add("hidden");
+      editDiv.innerHTML = "";
+      return;
     }
 
-    // Auto filter when inputs change
-    ["filterBrand","filterLength","filterMinCost","filterMaxCost"].forEach(id => {
-      document.addEventListener("input", e => { if (e.target.id === id) applyFilters(); });
-      document.addEventListener("change", e => { if (e.target.id === id) applyFilters(); });
-    });
-
-    function applyFilters() {
-      const brandSelect = document.getElementById("filterBrand");
-      const selectedBrands = Array.from(brandSelect.selectedOptions).map(opt => opt.value);
-      const length = document.getElementById("filterLength").value;
-      const minCost = parseFloat(document.getElementById("filterMinCost").value) || 0;
-      const maxCost = parseFloat(document.getElementById("filterMaxCost").value) || Infinity;
-      renderFilteredPianos(selectedBrands, length, minCost, maxCost);
-    }
-
-    function resetFilters() {
-      document.getElementById("filterBrand").selectedIndex = -1;
-      document.getElementById("filterLength").value = "";
-      document.getElementById("filterMinCost").value = "";
-      document.getElementById("filterMaxCost").value = "";
-      renderFilteredPianos([], "", 0, Infinity);
-    }
-
-    function renderFilteredPianos(selectedBrands, length, minCost, maxCost) {
-      document.getElementById("active-list").innerHTML = "";
-      document.getElementById("sold-list").innerHTML = "";
-
-      let matchCount = 0;
-      const applied = [];
-
-      if (selectedBrands.length > 0) {
-        applied.push("Brand: " + selectedBrands.map(b => b.charAt(0).toUpperCase() + b.slice(1)).join(", "));
-      }
-      if (length) {
-        applied.push("Length: " + length);
-      }
-      if (minCost > 0 || maxCost < Infinity) {
-        applied.push("Cost: " + (minCost > 0 ? `$${minCost}` : "Any") + " – " + (maxCost < Infinity ? `$${maxCost}` : "Any"));
-      }
-
-      allPianos.forEach(doc => {
-        const data = doc.data();
-        const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(data.brand?.toLowerCase());
-        const matchesLength = !length || data.length?.toLowerCase() === length;
-        const matchesCost = (!data.cost || (data.cost >= minCost && data.cost <= maxCost));
-
-        if (matchesBrand && matchesLength && matchesCost) {
-          if (data.status === "active") {
-            matchCount++;
-            renderPiano(doc, "active-list");
-          }
-          if (data.status === "sold") {
-            matchCount++;
-            renderPiano(doc, "sold-list");
-          }
-        }
-      });
-
-      const summary = applied.length > 0
-        ? `Filtering by → ${applied.join(" | ")}   (${matchCount} match${matchCount !== 1 ? "es" : ""})`
-        : `Showing all pianos (${matchCount} total)`;
-
-      document.getElementById("filterSummary").innerText = summary;
-    }
-
-    function renderPiano(doc, containerId) {
-      const data = doc.data();
-      const div = document.createElement("div");
-      div.className = "piano-card";
-      div.innerHTML = `
-        <strong>${data.brand || "Unknown"} ${data.model || ""}</strong><br>
-        Length: ${data.length || "N/A"}<br>
-        Cost: ${data.cost ? "$" + data.cost : "N/A"}<br>
-        Year: ${data.year || "N/A"}
+    db.collection("pianos").doc(id).get().then(doc => {
+      const d = doc.data();
+      editDiv.classList.remove("hidden");
+      editDiv.innerHTML = `
+        <form onsubmit="saveEdit(event, '${id}')">
+          <input type="text" id="edit-brand-${id}" value="${d.brand}"><br>
+          <input type="text" id="edit-model-${id}" value="${d.model}"><br>
+          <input type="number" id="edit-year-${id}" value="${d.year}"><br>
+          <input type="text" id="edit-color-${id}" value="${d.color}"><br>
+          <input type="text" id="edit-length-${id}" value="${d.length}"><br>
+          <input type="text" id="edit-location-${id}" value="${d.location}"><br>
+          <label>Player System <input type="checkbox" id="edit-playerSystem-${id}" ${d.playerSystem ? "checked" : ""}></label><br>
+          <label>Detailed <input type="checkbox" id="edit-detailed-${id}" ${d.detailed ? "checked" : ""}></label><br>
+          <input type="date" id="edit-detailDate-${id}" value="${d.detailDate || ""}"><br>
+          <textarea id="edit-notes-${id}">${d.notes || ""}</textarea><br>
+          <input type="file" id="edit-photo-${id}"><br>
+          <button type="submit" class="btn-add">Save</button>
+        </form>
       `;
-      document.getElementById(containerId).appendChild(div);
+    });
+  }
+
+  async function saveEdit(e, id) {
+    e.preventDefault();
+    const docRef = db.collection("pianos").doc(id);
+    const updates = {
+      brand: document.getElementById(`edit-brand-${id}`).value,
+      model: document.getElementById(`edit-model-${id}`).value,
+      year: document.getElementById(`edit-year-${id}`).value,
+      color: document.getElementById(`edit-color-${id}`).value,
+      length: document.getElementById(`edit-length-${id}`).value,
+      location: document.getElementById(`edit-location-${id}`).value,
+      playerSystem: document.getElementById(`edit-playerSystem-${id}`).checked,
+      detailed: document.getElementById(`edit-detailed-${id}`).checked,
+      detailDate: document.getElementById(`edit-detailDate-${id}`).value,
+      notes: document.getElementById(`edit-notes-${id}`).value
+    };
+
+    const newPhoto = document.getElementById(`edit-photo-${id}`).files[0];
+    if (newPhoto) {
+      const storageRef = storage.ref("piano_photos/" + Date.now() + "_" + newPhoto.name);
+      await storageRef.put(newPhoto);
+      updates.photoURL = await storageRef.getDownloadURL();
     }
 
-    // Firestore listener
-    db.collection("pianos").orderBy("createdAt","desc").onSnapshot(snapshot => {
-      allPianos = snapshot.docs;
-      populateDropdowns();
-      resetFilters();
-    });
-  </script>
+    await docRef.update(updates);
+  }
 
+  // Update status
+  function updateStatus(id, newStatus) {
+    if (confirm("Are you sure you want to move this piano to " + newStatus + "?")) {
+      db.collection("pianos").doc(id).update({ status: newStatus });
+    }
+  }
+
+  // Delete
+  function deletePiano(id) {
+    if (confirm("Are you sure you want to delete this piano?")) {
+      db.collection("pianos").doc(id).delete();
+    }
+  }
+
+  // Tabs
+  function showTab(tab) {
+    ["active", "sold", "archive"].forEach(t => {
+      document.getElementById(t+"-list").classList.add("hidden");
+      document.querySelector(`.tab:nth-child(${["active","sold","archive"].indexOf(t)+1})`).classList.remove("active");
+    });
+    document.getElementById(tab+"-list").classList.remove("hidden");
+    document.querySelector(`.tab:nth-child(${["active","sold","archive"].indexOf(tab)+1})`).classList.add("active");
+  }
+
+  // Realtime updates
+  db.collection("pianos").orderBy("createdAt","desc").onSnapshot(snapshot => {
+    document.getElementById("active-list").innerHTML = "";
+    document.getElementById("sold-list").innerHTML = "";
+    document.getElementById("archive-list").innerHTML = "";
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.status === "active") renderPiano(doc,"active-list");
+      if (data.status === "sold") renderPiano(doc,"sold-list");
+      if (data.status === "archive") renderPiano(doc,"archive-list");
+    });
+  });
+</script>
 </body>
 </html>
