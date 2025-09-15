@@ -57,6 +57,8 @@
     <label>Detailed <input type="checkbox" id="detailed"></label><br>
     <input type="date" id="detailDate"><br>
     <textarea id="notes" placeholder="Notes"></textarea><br>
+    <input type="number" id="cost" placeholder="Cost"><br>
+    <input type="number" id="listingPrice" placeholder="Listing Price"><br>
     <input type="file" id="photo"><br>
     <button type="submit" class="btn-add">Add Piano</button>
   </form>
@@ -68,12 +70,12 @@
 <div id="archive-list" class="hidden"></div>
 
 <script>
-  // Firebase config (FIXED storageBucket)
+  // Firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
     authDomain: "pianoinv.firebaseapp.com",
     projectId: "pianoinv",
-    storageBucket: "pianoinv.firebasestorage.app",
+    storageBucket: "pianoinv.appspot.com", // keep your correct bucket
     messagingSenderId: "651707888262",
     appId: "1:651707888262:web:23131a782e31a7bb511707",
     measurementId: "G-1XQLEV28JZ"
@@ -128,6 +130,8 @@
       detailed: document.getElementById("detailed").checked,
       detailDate: document.getElementById("detailDate").value,
       notes: document.getElementById("notes").value,
+      cost: parseFloat(document.getElementById("cost").value) || null,
+      listingPrice: parseFloat(document.getElementById("listingPrice").value) || null,
       photoURL: photoURL,
       status: "active",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -153,6 +157,11 @@
           <p><strong>Player System:</strong> ${data.playerSystem ? "Yes" : "No"}</p>
           <p><strong>Detailed:</strong> ${data.detailed ? "Yes (" + data.detailDate + ")" : "No"}</p>
           <p><strong>Notes:</strong> ${data.notes || ""}</p>
+          <p><strong>Cost:</strong> ${data.cost ? "$" + data.cost : "N/A"}</p>
+          <p><strong>Listing Price:</strong> ${data.listingPrice ? "$" + data.listingPrice : "N/A"}</p>
+          <p><strong>Status:</strong> ${data.status}</p>
+          <p><strong>Created At:</strong> ${data.createdAt ? data.createdAt.toDate().toLocaleString() : ""}</p>
+          
           ${currentUser ? `
             <button onclick="updateStatus('${doc.id}','sold')" class="btn-sell">Sell</button>
             <button onclick="updateStatus('${doc.id}','archive')" class="btn-archive">Archive</button>
@@ -193,6 +202,8 @@
           <label>Detailed <input type="checkbox" id="edit-detailed-${id}" ${d.detailed ? "checked" : ""}></label><br>
           <input type="date" id="edit-detailDate-${id}" value="${d.detailDate || ""}"><br>
           <textarea id="edit-notes-${id}">${d.notes || ""}</textarea><br>
+          <input type="number" id="edit-cost-${id}" value="${d.cost || ""}"><br>
+          <input type="number" id="edit-listingPrice-${id}" value="${d.listingPrice || ""}"><br>
           <input type="file" id="edit-photo-${id}"><br>
           <button type="submit" class="btn-add">Save</button>
         </form>
@@ -213,7 +224,9 @@
       playerSystem: document.getElementById(`edit-playerSystem-${id}`).checked,
       detailed: document.getElementById(`edit-detailed-${id}`).checked,
       detailDate: document.getElementById(`edit-detailDate-${id}`).value,
-      notes: document.getElementById(`edit-notes-${id}`).value
+      notes: document.getElementById(`edit-notes-${id}`).value,
+      cost: parseFloat(document.getElementById(`edit-cost-${id}`).value) || null,
+      listingPrice: parseFloat(document.getElementById(`edit-listingPrice-${id}`).value) || null
     };
 
     const newPhoto = document.getElementById(`edit-photo-${id}`).files[0];
