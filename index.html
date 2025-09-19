@@ -10,7 +10,8 @@
     .tabs { display:flex; gap:10px; margin-bottom:20px; }
     .tab { padding:8px 14px; border:1px solid #ccc; cursor:pointer; border-radius:6px; background:#fff; }
     .tab.active { background:#007bff; color:#fff; font-weight:bold; border-color:#007bff; }
-    .filters { margin-bottom:20px; display:flex; gap:10px; align-items:center; }
+    .filters { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; }
+    .filters input, .filters select { padding:8px; border:1px solid #ccc; border-radius:6px; }
     .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
     .card { background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; }
     .card h3 { margin:0 0 8px; }
@@ -30,10 +31,25 @@
     #sold-summary .row { display:flex; gap:16px; flex-wrap:wrap; }
     #sold-summary .row > div { min-width:220px; }
     .muted { color:#666; }
+
+    /* 🌙 Dark mode */
+    body.dark { background:#121212; color:#eaeaea; }
+    body.dark h1 { color:#fff; }
+    body.dark .card { background:#1e1e1e; border-color:#333; }
+    body.dark .tab { background:#222; color:#ccc; border-color:#444; }
+    body.dark .tab.active { background:#007bff; color:#fff; border-color:#007bff; }
+    body.dark input, body.dark select, body.dark textarea {
+      background:#222; color:#eee; border-color:#555;
+    }
+    body.dark button { opacity:0.9; }
+    body.dark #sold-summary { background:#1e1e1e; border-color:#333; }
   </style>
 </head>
 <body>
   <h1>🎹 Piano Inventory</h1>
+
+  <!-- Dark Mode Toggle -->
+  <button id="darkToggle" class="gray" style="margin-bottom:15px;">🌙 Toggle Dark Mode</button>
 
   <!-- Auth -->
   <div>
@@ -51,12 +67,18 @@
     <div class="tab" data-tab="archive">Archive</div>
   </div>
 
-  <!-- Sort dropdown -->
+  <!-- Filters -->
   <div class="filters">
-    <label for="sortBy">Sort by: </label>
+    <label for="sortBy">Sort: </label>
     <select id="sortBy">
       <option value="createdAt">Created (newest)</option>
       <option value="profit">Profit (high → low)</option>
+    </select>
+    <input type="text" id="searchBox" placeholder="Search (brand, model, year, notes)">
+    <select id="filterLocation">
+      <option value="">All Locations</option>
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
     </select>
   </div>
 
@@ -84,7 +106,7 @@
     </div>
   </form>
 
-  <!-- Sold summary (shows only in Sold tab) -->
+  <!-- Sold summary -->
   <div id="sold-summary" class="hidden">
     <strong>Sold Summary</strong>
     <div class="row">
@@ -113,7 +135,7 @@
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
       authDomain: "pianoinv.firebaseapp.com",
       projectId: "pianoinv",
-      storageBucket: "pianoinv.appspot.com",
+      storageBucket: "pianoinv.firebasestorage.app",
       messagingSenderId: "651707888262",
       appId: "1:651707888262:web:23131a782e31a7bb511707",
       measurementId: "G-1XQLEV28JZ"
@@ -123,287 +145,98 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    // ---- UI refs
-    const toast = document.getElementById("toast");
-    const pianoForm = document.getElementById("pianoForm");
-    const submitBtn = document.getElementById("submitBtn");
-    const cancelEditBtn = document.getElementById("cancelEditBtn");
-    const activeListEl = document.getElementById("active-list");
-    const soldListEl = document.getElementById("sold-list");
-    const archiveListEl = document.getElementById("archive-list");
-    const soldSummaryEl = document.getElementById("sold-summary");
-    const sumSalesEl = document.getElementById("sumSales");
-    const sumCostEl = document.getElementById("sumCost");
-    const sumProfitEl = document.getElementById("sumProfit");
-    const sumCommEl = document.getElementById("sumComm");
-    const sortByEl = document.getElementById("sortBy");
+    const toast=document.getElementById("toast");
+    function showToast(m){ toast.textContent=m; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),2000); }
+    function money(n){ return (n==null||isNaN(n)) ? "—" : n.toLocaleString(undefined,{style:"currency",currency:"USD"}); }
 
-    // Form fields
-    const brand = document.getElementById("brand");
-    const model = document.getElementById("model");
-    const year = document.getElementById("year");
-    const color = document.getElementById("color");
-    const length = document.getElementById("length");
-    const locationSel = document.getElementById("location");
-    const cost = document.getElementById("cost");
-    const listingPrice = document.getElementById("listingPrice");
-    const soldPrice = document.getElementById("soldPrice");
-    const archiveReason = document.getElementById("archiveReason");
-    const notes = document.getElementById("notes");
-    const photo = document.getElementById("photo");
-    const editingId = document.getElementById("editingId");
-
-    function showToast(m){ toast.textContent = m; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"), 2000); }
-    function money(n){ return (n==null || isNaN(n)) ? "—" : n.toLocaleString(undefined,{style:"currency",currency:"USD"}); }
-
-    // ---- Auth
-    let currentUser = null;
-    onAuthStateChanged(auth, u=>{
-      currentUser = u;
-      pianoForm.classList.toggle("hidden", !u);
-      document.getElementById("loginBtn").classList.toggle("hidden", !!u);
-      document.getElementById("logoutBtn").classList.toggle("hidden", !u);
-      document.getElementById("whoami").textContent = u ? u.email : "";
+    let currentUser=null;
+    onAuthStateChanged(auth,u=>{
+      currentUser=u;
+      pianoForm.classList.toggle("hidden",!u);
+      loginBtn.classList.toggle("hidden",!!u);
+      logoutBtn.classList.toggle("hidden",!u);
+      document.getElementById("whoami").textContent=u?u.email:"";
     });
-    loginBtn.onclick = ()=>signInWithEmailAndPassword(auth, email.value, password.value).catch(e=>showToast(e.message));
-    logoutBtn.onclick = ()=>signOut(auth);
+    loginBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,password.value).catch(e=>showToast(e.message));
+    logoutBtn.onclick=()=>signOut(auth);
 
-    // ---- State
-    let docsCache = [];             // full set from Firestore
-    let currentTab = "active";      // active | sold | archive
+    // Dark mode toggle
+    const darkToggle=document.getElementById("darkToggle");
+    darkToggle.addEventListener("click",()=>{
+      document.body.classList.toggle("dark");
+      localStorage.setItem("darkMode", document.body.classList.contains("dark") ? "on" : "off");
+    });
+    if(localStorage.getItem("darkMode")==="on"){ document.body.classList.add("dark"); }
 
-    // ---- Form helpers
-    function resetForm(){
-      pianoForm.reset();
-      editingId.value = "";
-      submitBtn.textContent = "Add Piano";
-      submitBtn.classList.remove("orange");
-      submitBtn.classList.add("green");
-      cancelEditBtn.classList.add("hidden");
-      photo.value = "";
-    }
-    function setEdit(id, data){
-      editingId.value = id;
-      brand.value = data.brand || "";
-      model.value = data.model || "";
-      year.value = data.year || "";
-      color.value = data.color || "";
-      length.value = data.length || "";
-      locationSel.value = data.location || "Gallery";
-      cost.value = (data.cost ?? "");
-      listingPrice.value = (data.listingPrice ?? "");
-      soldPrice.value = (data.soldPrice ?? "");
-      archiveReason.value = data.archiveReason || "";
-      notes.value = data.notes || "";
-      submitBtn.textContent = "Save Changes";
-      submitBtn.classList.remove("green");
-      submitBtn.classList.add("orange");
-      cancelEditBtn.classList.remove("hidden");
-      window.scrollTo({top:0, behavior:"smooth"});
-    }
-    cancelEditBtn.onclick = resetForm;
+    // State
+    let docsCache=[];
+    let currentTab="active";
 
-    // ---- Add / Update
-    pianoForm.addEventListener("submit", async (e)=>{
+    // Reset form
+    function resetForm(){ pianoForm.reset(); editingId.value=""; submitBtn.textContent="Add Piano"; submitBtn.classList.remove("orange"); submitBtn.classList.add("green"); cancelEditBtn.classList.add("hidden"); }
+    function setEdit(id,data){ editingId.value=id; brand.value=data.brand||""; model.value=data.model||""; year.value=data.year||""; color.value=data.color||""; length.value=data.length||""; location.value=data.location||"Gallery"; cost.value=data.cost??""; listingPrice.value=data.listingPrice??""; soldPrice.value=data.soldPrice??""; archiveReason.value=data.archiveReason||""; notes.value=data.notes||""; submitBtn.textContent="Save Changes"; submitBtn.classList.remove("green"); submitBtn.classList.add("orange"); cancelEditBtn.classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"}); }
+    cancelEditBtn.onclick=resetForm;
+
+    // Save piano
+    pianoForm.addEventListener("submit",async e=>{
       e.preventDefault();
       if(!currentUser){ showToast("Sign in required"); return; }
-
-      const id = editingId.value;
-      const data = {
-        brand: brand.value,
-        model: model.value,
-        year: year.value ? +year.value : null,
-        color: color.value,
-        length: length.value,
-        location: locationSel.value,
-        cost: cost.value ? +cost.value : null,
-        listingPrice: listingPrice.value ? +listingPrice.value : null,
-        soldPrice: soldPrice.value ? +soldPrice.value : null,
-        archiveReason: archiveReason.value,
-        notes: notes.value
-      };
-
-      let photoURL = null;
-      if(photo.files[0]){
-        const sref = ref(storage, "piano_photos/" + Date.now() + "_" + photo.files[0].name);
-        await uploadBytes(sref, photo.files[0]);
-        photoURL = await getDownloadURL(sref);
-      }
-
-      if(id){
-        const refDoc = doc(db, "pianos", id);
-        if(photoURL) data.photoURL = photoURL;
-        await updateDoc(refDoc, data);
-        showToast("Updated");
-      }else{
-        await addDoc(collection(db, "pianos"), {
-          ...data,
-          photoURL: photoURL || "",
-          status: "active",
-          createdAt: serverTimestamp()
-        });
-        showToast("Added");
-      }
+      const id=editingId.value;
+      const data={ brand:brand.value,model:model.value,year:year.value?+year.value:null,color:color.value,length:length.value,location:location.value,cost:cost.value?+cost.value:null,listingPrice:listingPrice.value?+listingPrice.value:null,soldPrice:soldPrice.value?+soldPrice.value:null,archiveReason:archiveReason.value,notes:notes.value };
+      let photoURL=null;
+      if(photo.files[0]){ const r=ref(storage,"piano_photos/"+Date.now()+"_"+photo.files[0].name); await uploadBytes(r,photo.files[0]); photoURL=await getDownloadURL(r); }
+      if(id){ const refDoc=doc(db,"pianos",id); if(photoURL)data.photoURL=photoURL; await updateDoc(refDoc,data); showToast("Updated"); } else { await addDoc(collection(db,"pianos"),{...data,photoURL:photoURL||"",status:"active",createdAt:serverTimestamp()}); showToast("Added"); }
       resetForm();
     });
 
-    // ---- Status actions
-    async function updateStatus(id, status){
-      if(!currentUser){ showToast("Sign in required"); return; }
-      const refDoc = doc(db, "pianos", id);
+    // Status updates
+    async function updateStatus(id,status){ if(!currentUser){showToast("Sign in required");return;} const refDoc=doc(db,"pianos",id); if(status==="sold"){ let price=prompt("Sold price? (blank = listing price)"); await updateDoc(refDoc,{status:"sold",soldAt:serverTimestamp(),soldPrice:price?+price:null}); } else if(status==="archive"){ let reason=prompt("Archive reason?")||""; await updateDoc(refDoc,{status:"archive",archivedAt:serverTimestamp(),archiveReason:reason}); } else { await updateDoc(refDoc,{status}); } }
+    async function deletePiano(id){ if(currentUser&&confirm("Delete this piano?")) await deleteDoc(doc(db,"pianos",id)); }
+    window.updateStatus=updateStatus; window.deletePiano=deletePiano;
 
-      if(status === "sold"){
-        let price = prompt("Sold price? (leave blank to use listing price)");
-        await updateDoc(refDoc, {
-          status: "sold",
-          soldAt: serverTimestamp(),
-          soldPrice: price ? +price : null
-        });
-      }else if(status === "archive"){
-        let reason = prompt("Archive reason?") || "";
-        await updateDoc(refDoc, {
-          status: "archive",
-          archivedAt: serverTimestamp(),
-          archiveReason: reason
-        });
-      }else{
-        await updateDoc(refDoc, { status });
-      }
-    }
-    async function deletePiano(id){
-      if(!currentUser){ showToast("Sign in required"); return; }
-      if(confirm("Delete this piano?")){
-        await deleteDoc(doc(db, "pianos", id));
-      }
-    }
+    // Render
+    const activeListEl=document.getElementById("active-list");
+    const soldListEl=document.getElementById("sold-list");
+    const archiveListEl=document.getElementById("archive-list");
+    const soldSummaryEl=document.getElementById("sold-summary");
+    const sumSalesEl=document.getElementById("sumSales");
+    const sumCostEl=document.getElementById("sumCost");
+    const sumProfitEl=document.getElementById("sumProfit");
+    const sumCommEl=document.getElementById("sumComm");
+    const sortByEl=document.getElementById("sortBy");
 
-    // ---- Render
     function render(){
-      // Containers visibility by tab
-      activeListEl.classList.toggle("hidden", currentTab !== "active");
-      soldListEl.classList.toggle("hidden", currentTab !== "sold");
-      archiveListEl.classList.toggle("hidden", currentTab !== "archive");
-      soldSummaryEl.classList.toggle("hidden", currentTab !== "sold");
+      activeListEl.innerHTML=""; soldListEl.innerHTML=""; archiveListEl.innerHTML="";
+      activeListEl.classList.toggle("hidden",currentTab!=="active");
+      soldListEl.classList.toggle("hidden",currentTab!=="sold");
+      archiveListEl.classList.toggle("hidden",currentTab!=="archive");
+      soldSummaryEl.classList.toggle("hidden",currentTab!=="sold");
 
-      // Clear lists
-      activeListEl.innerHTML = "";
-      soldListEl.innerHTML = "";
-      archiveListEl.innerHTML = "";
+      let filtered=[...docsCache];
+      const q=document.getElementById("searchBox").value.toLowerCase();
+      if(q){ filtered=filtered.filter(d=>(d.brand||"").toLowerCase().includes(q)||(d.model||"").toLowerCase().includes(q)||(d.notes||"").toLowerCase().includes(q)||(d.year?.toString()||"").includes(q)); }
+      const loc=document.getElementById("filterLocation").value;
+      if(loc){ filtered=filtered.filter(d=>d.location===loc); }
 
-      // Sorting
-      const sortBy = sortByEl.value;
-      const sorted = [...docsCache];
+      const sortBy=sortByEl.value;
+      if(sortBy==="profit"){ filtered.sort((a,b)=>{const ap=(a.soldPrice??a.listingPrice??0)-(a.cost??0);const bp=(b.soldPrice??b.listingPrice??0)-(b.cost??0);return bp-ap;}); }
+      else { filtered.sort((a,b)=>{const at=a.createdAt?.toMillis?.()||0;const bt=b.createdAt?.toMillis?.()||0;return bt-at;}); }
 
-      if(sortBy === "profit"){
-        sorted.sort((a,b)=>{
-          const ap = (a.soldPrice ?? a.listingPrice ?? 0) - (a.cost ?? 0);
-          const bp = (b.soldPrice ?? b.listingPrice ?? 0) - (b.cost ?? 0);
-          return bp - ap; // high → low
-        });
-      }else{ // createdAt
-        sorted.sort((a,b)=>{
-          const at = a.createdAt?.toMillis?.() || 0;
-          const bt = b.createdAt?.toMillis?.() || 0;
-          return bt - at;
-        });
-      }
+      if(currentTab==="sold"){ let totalSales=0,totalCost=0,totalProfit=0,totalComm=0; for(const d of filtered.filter(x=>x.status==="sold")){ const sp=(d.soldPrice!=null?d.soldPrice:d.listingPrice)||0; const c=d.cost||0; const profit=(sp&&d.cost!=null)?sp-c:null; const comm=profit!=null?profit*0.15:null; totalSales+=sp; totalCost+=c; if(profit!=null)totalProfit+=profit; if(comm!=null)totalComm+=comm; } sumSalesEl.textContent=money(totalSales); sumCostEl.textContent=money(totalCost); sumProfitEl.textContent=money(totalProfit); sumCommEl.textContent=money(totalComm); }
 
-      // Summary (across all sold pianos)
-      if(currentTab === "sold"){
-        const solds = docsCache.filter(d => d.status === "sold");
-        let totalSales = 0, totalCost = 0, totalProfit = 0, totalComm = 0;
-
-        for(const d of solds){
-          const sp = (d.soldPrice != null ? d.soldPrice : d.listingPrice) || 0;
-          const c  = d.cost || 0;
-          const profit = (d.soldPrice != null || d.listingPrice != null) && d.cost != null ? (sp - c) : null;
-          const comm   = profit != null ? profit * 0.15 : null;
-
-          totalSales += sp || 0;
-          totalCost  += c  || 0;
-          if(profit != null) totalProfit += profit;
-          if(comm   != null) totalComm   += comm;
-        }
-
-        sumSalesEl.textContent  = money(totalSales);
-        sumCostEl.textContent   = money(totalCost);
-        sumProfitEl.textContent = money(totalProfit);
-        sumCommEl.textContent   = (isNaN(totalComm) ? "$0.00" : totalComm.toLocaleString(undefined,{style:"currency",currency:"USD"}));
-      }
-
-      // Cards
-      for(const d of sorted){
-        const card = document.createElement("div");
-        card.className = "card";
-
-        let extra = "";
-        if(d.status === "sold" && d.soldAt?.toDate){
-          const sp = d.soldPrice != null ? d.soldPrice : d.listingPrice;
-          const profit = (sp != null && d.cost != null) ? sp - d.cost : null;
-          const commission = (profit != null) ? profit * 0.15 : null;
-          extra = `
-            <div><strong>Buying Cost:</strong> ${money(d.cost)}</div>
-            <div><strong>Listing Price:</strong> ${money(d.listingPrice)}</div>
-            <div><strong>Sold Price:</strong> ${money(sp)}</div>
-            <div><strong>Profit:</strong> ${profit != null ? money(profit) : "—"}</div>
-            <div><strong>Sales Commission (15%):</strong> ${commission != null ? commission.toLocaleString(undefined,{style:"currency",currency:"USD"}) : "—"}</div>
-            <div><strong>Sold on:</strong> ${d.soldAt.toDate().toLocaleDateString()}</div>`;
-        }
-        if(d.status === "archive" && d.archivedAt?.toDate){
-          extra = `<div><strong>Archived on:</strong> ${d.archivedAt.toDate().toLocaleDateString()} ${d.archiveReason ? "— "+d.archiveReason : ""}</div>`;
-        }
-
-        card.innerHTML = `
-          <h3>${(d.brand||"") + (d.model ? " " + d.model : "")}</h3>
-          <div class="meta">Status: ${d.status}${d.year ? " • Year " + d.year : ""}${d.color ? " • " + d.color : ""}${d.location ? " • " + d.location : ""}</div>
-          ${d.notes ? `<div class="meta">${d.notes}</div>` : ""}
-          ${extra}
-          <div class="actions">
-            ${currentUser ? `
-              ${d.status!=="sold"    ? `<button class="blue"   onclick="updateStatus('${d._id}','sold')">Sell</button>` : ""}
-              ${d.status!=="archive" ? `<button class="gray"   onclick="updateStatus('${d._id}','archive')">Archive</button>` : ""}
-              ${d.status!=="active"  ? `<button class="green"  onclick="updateStatus('${d._id}','active')">Activate</button>` : ""}
-              <button class="orange" onclick='(function(){ window.__setEdit("${d._id}"); })()'>Edit</button>
-              <button class="red"    onclick="deletePiano('${d._id}')">Delete</button>
-            ` : ""}
-          </div>
-        `;
-
-        if(d.status === "active")  activeListEl.appendChild(card);
-        if(d.status === "sold")    soldListEl.appendChild(card);
-        if(d.status === "archive") archiveListEl.appendChild(card);
-      }
+      for(const d of filtered){ const c=document.createElement("div"); c.className="card"; let extra=""; if(d.status==="sold"&&d.soldAt?.toDate){ const sp=d.soldPrice!=null?d.soldPrice:d.listingPrice; const profit=(sp!=null&&d.cost!=null)?sp-d.cost:null; const commission=(profit!=null)?profit*0.15:null; extra=`<div><strong>Buying Cost:</strong> ${money(d.cost)}</div><div><strong>Listing Price:</strong> ${money(d.listingPrice)}</div><div><strong>Sold Price:</strong> ${money(sp)}</div><div><strong>Profit:</strong> ${profit!=null?money(profit):"—"}</div><div><strong>Commission (15%):</strong> ${commission!=null?money(commission):"—"}</div><div><strong>Sold on:</strong> ${d.soldAt.toDate().toLocaleDateString()}</div>`; } if(d.status==="archive"&&d.archivedAt?.toDate){ extra=`<div><strong>Archived on:</strong> ${d.archivedAt.toDate().toLocaleDateString()} ${d.archiveReason?("— "+d.archiveReason):""}</div>`; } c.innerHTML=`${d.photoURL?`<div><img src="${d.photoURL}" alt="photo" style="max-width:100%;max-height:150px;object-fit:cover;border-radius:6px;margin-bottom:8px;"></div>`:""}<h3>${(d.brand||"")+(d.model?" "+d.model:"")}</h3><div class="meta">Status: ${d.status}${d.year?" • Year "+d.year:""}${d.color?" • "+d.color:""}${d.location?" • "+d.location:""}</div>${d.notes?`<div class="meta">${d.notes}</div>`:""}${extra}<div class="actions">${currentUser?`${d.status!=="sold"?`<button class="blue" onclick="updateStatus('${d._id}','sold')">Sell</button>`:""}${d.status!=="archive"?`<button class="gray" onclick="updateStatus('${d._id}','archive')">Archive</button>`:""}${d.status!=="active"?`<button class="green" onclick="updateStatus('${d._id}','active')">Activate</button>`:""}<button class="orange" onclick='(function(){ window.__setEdit("${d._id}"); })()'>Edit</button><button class="red" onclick="deletePiano('${d._id}')">Delete</button>`:""}</div>`; if(d.status==="active")activeListEl.appendChild(c); if(d.status==="sold")soldListEl.appendChild(c); if(d.status==="archive")archiveListEl.appendChild(c); }
     }
 
-    // expose an edit helper that pulls fresh doc for safety
-    window.__setEdit = async (id)=>{
-      const refDoc = doc(db, "pianos", id);
-      const snap = await getDoc(refDoc);
-      if(snap.exists()){
-        setEdit(id, snap.data());
-      }
-    };
+    window.__setEdit=async id=>{ const snap=await getDoc(doc(db,"pianos",id)); if(snap.exists())setEdit(id,snap.data()); };
 
-    // ---- Tabs + sorting
-    document.querySelectorAll(".tab").forEach(t=>{
-      t.onclick = ()=>{
-        document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-        t.classList.add("active");
-        currentTab = t.dataset.tab;
-        render();
-      };
-    });
-    sortByEl.addEventListener("change", ()=>render());
+    // Tabs
+    document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{ document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active"); currentTab=t.dataset.tab; render(); });
+    sortByEl.addEventListener("change",()=>render());
+    document.getElementById("searchBox").addEventListener("input",()=>render());
+    document.getElementById("filterLocation").addEventListener("change",()=>render());
 
-    // ---- Live Firestore
-    onSnapshot(query(collection(db, "pianos"), orderBy("createdAt", "desc")), (snap)=>{
-      docsCache = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
-      render();
-    });
-
-    // ---- Make functions global for inline handlers
-    window.updateStatus = updateStatus;
-    window.deletePiano = deletePiano;
+    // Live updates
+    onSnapshot(query(collection(db,"pianos"),orderBy("createdAt","desc")),snap=>{ docsCache=snap.docs.map(d=>({...d.data(),_id:d.id})); render(); });
   </script>
 </body>
 </html>
