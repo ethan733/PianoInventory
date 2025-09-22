@@ -24,7 +24,7 @@
     .red { background:#dc3545; color:#fff; }
     .gray { background:#6c757d; color:#fff; }
     .hidden { display:none; }
-    #toast { position:fixed; bottom:20px; right:20px; background:#333; color:#fff; padding:10px 14px; border-radius:6px; opacity:0; transition:opacity .3s; }
+    #toast { position:fixed; bottom:20px; right:20px; background:#333; color:#fff; padding:10px 14px; border-radius:6px; opacity:0; transition:opacity .3s; z-index:2000; }
     #toast.show { opacity:1; }
 
     /* Dark mode */
@@ -46,7 +46,7 @@
     .modal-content h2 { margin-top:0; }
     .close { position:absolute; top:10px; right:15px; font-size:22px; cursor:pointer; }
     body.dark .modal-content { background:#1e1e1e; color:#fff; }
-    form input { width:100%; margin:6px 0; padding:8px; border:1px solid #ccc; border-radius:6px; }
+    form input, form textarea, form select { width:100%; margin:6px 0; padding:8px; border:1px solid #ccc; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -89,6 +89,38 @@
   <div id="delivered-list" class="grid hidden"></div>
   <div id="archive-list" class="grid hidden"></div>
 
+  <!-- Add Piano Modal -->
+  <div id="pianoModal" class="modal hidden">
+    <div class="modal-content">
+      <span id="closeModal" class="close">&times;</span>
+      <h2 id="modalTitle">Add Piano</h2>
+      <form id="pianoForm">
+        <input type="text" id="brand" placeholder="Brand" required>
+        <input type="text" id="model" placeholder="Model">
+        <input type="number" id="year" placeholder="Year">
+        <input type="text" id="color" placeholder="Color">
+        <input type="text" id="length" placeholder="Length">
+        <select id="location">
+          <option value="Gallery">Gallery</option>
+          <option value="Cartersville">Cartersville</option>
+        </select>
+        <input type="number" id="cost" placeholder="Buying Cost">
+        <input type="number" id="listingPrice" placeholder="Listing Price">
+        <textarea id="notes" placeholder="Notes"></textarea>
+        <input type="file" id="photo" accept="image/*">
+        <button type="submit" class="green">Add Piano</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Photo Preview Modal -->
+  <div id="imgPreviewModal" class="modal hidden">
+    <div class="modal-content" style="max-width:90%; max-height:90%;">
+      <span id="closeImgPreview" class="close" style="color:white; font-size:30px; right:20px;">&times;</span>
+      <img id="previewImg" src="" alt="Preview" style="max-width:100%; max-height:100%; border-radius:8px; display:block; margin:auto;">
+    </div>
+  </div>
+
   <!-- Sell Modal -->
   <div id="sellModal" class="modal hidden">
     <div class="modal-content">
@@ -129,44 +161,98 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    // Toast
     const toast=document.getElementById("toast");
     function showToast(m){ toast.textContent=m; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),2000); }
 
-    // Sell modal
-    let currentSellId=null;
-    const sellModal=document.getElementById("sellModal");
-    document.getElementById("closeSellModal").onclick=()=>sellModal.classList.add("hidden");
+    // Auth
+    let currentUser=null;
+    onAuthStateChanged(auth,u=>{
+      currentUser=u;
+      loginBtn.classList.toggle("hidden",!!u);
+      logoutBtn.classList.toggle("hidden",!u);
+      document.getElementById("whoami").textContent=u?u.email:"";
+    });
+    loginBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,password.value)
+      .then(()=>showToast("✅ Signed in"))
+      .catch(e=>showToast("❌ "+e.message));
+    logoutBtn.onclick=()=>signOut(auth).then(()=>showToast("👋 Signed out"));
 
-    document.getElementById("sellForm").addEventListener("submit",async e=>{
+    // Dark mode
+    darkToggle.onclick=()=>{
+      document.body.classList.toggle("dark");
+      localStorage.setItem("darkMode", document.body.classList.contains("dark") ? "on" : "off");
+    };
+    if(localStorage.getItem("darkMode")==="on"){ document.body.classList.add("dark"); }
+
+    // Add Piano Modal
+    openModal.onclick=()=>{ pianoModal.classList.remove("hidden"); };
+    closeModal.onclick=()=>pianoModal.classList.add("hidden");
+    pianoForm.addEventListener("submit",async e=>{
       e.preventDefault();
-      const id=currentSellId;
-      const sellPrice=+document.getElementById("sellPrice").value;
-      const salesman=document.getElementById("salesman").value;
-      const deliveryName=document.getElementById("deliveryName").value;
-      const deliveryAddress=document.getElementById("deliveryAddress").value;
-      const deliveryPhone=document.getElementById("deliveryPhone").value;
-      await updateDoc(doc(db,"pianos",id),{
-        status:"sold",
-        sellPrice,
-        salesman,
-        delivery:{name:deliveryName,address:deliveryAddress,phone:deliveryPhone||""},
-        soldAt:serverTimestamp()
-      });
-      sellModal.classList.add("hidden");
-      currentSellId=null;
+      if(!currentUser){ showToast("🔒 Sign in required"); return; }
+      try {
+        let photoURL="";
+        if(photo.files[0]){
+          const r=ref(storage,"piano_photos/"+Date.now()+"_"+photo.files[0].name);
+          await uploadBytes(r,photo.files[0]);
+          photoURL=await getDownloadURL(r);
+        }
+        await addDoc(collection(db,"pianos"),{
+          brand:brand.value, model:model.value, year:year.value?+year.value:null,
+          color:color.value, length:length.value, location:location.value,
+          cost:cost.value?+cost.value:null, listingPrice:listingPrice.value?+listingPrice.value:null,
+          notes:notes.value, photoURL, status:"active", createdAt:serverTimestamp()
+        });
+        showToast("🎹 Piano added");
+        pianoForm.reset(); pianoModal.classList.add("hidden");
+      } catch(err){ showToast("❌ Error adding piano: "+err.message); }
     });
 
+    // Image Preview
+    window.openPreview=(src)=>{ previewImg.src=src; imgPreviewModal.classList.remove("hidden"); };
+    closeImgPreview.onclick=()=>imgPreviewModal.classList.add("hidden");
+
+    // Sell modal
+    let currentSellId=null;
+    closeSellModal.onclick=()=>sellModal.classList.add("hidden");
+    sellForm.addEventListener("submit",async e=>{
+      e.preventDefault();
+      const id=currentSellId;
+      try {
+        await updateDoc(doc(db,"pianos",id),{
+          status:"sold",
+          sellPrice:+sellPrice.value,
+          salesman:salesman.value,
+          delivery:{name:deliveryName.value,address:deliveryAddress.value,phone:deliveryPhone.value||""},
+          soldAt:serverTimestamp()
+        });
+        showToast("✅ Marked as SOLD");
+        sellModal.classList.add("hidden"); currentSellId=null;
+      } catch(err){ showToast("❌ Error selling: "+err.message); }
+    });
     window.openSellModal=(id)=>{ currentSellId=id; sellModal.classList.remove("hidden"); };
 
     // Status updates
     window.updateStatus=async (id,status)=>{
       const ref=doc(db,"pianos",id);
-      if(status==="delivered") await updateDoc(ref,{status:"delivered",deliveredAt:serverTimestamp()});
-      else if(status==="archive") await updateDoc(ref,{status:"archive",archivedAt:serverTimestamp()});
-      else if(status==="active") await updateDoc(ref,{status:"active"});
+      try {
+        if(status==="delivered"){
+          await updateDoc(ref,{status:"delivered",deliveredAt:serverTimestamp()});
+          showToast("🚚 Marked as DELIVERED");
+        } else if(status==="archive"){
+          await updateDoc(ref,{status:"archive",archivedAt:serverTimestamp()});
+          showToast("📦 Moved to ARCHIVE");
+        } else if(status==="active"){
+          await updateDoc(ref,{status:"active"});
+          showToast("🟢 Reopened as ACTIVE");
+        }
+      } catch(err){ showToast("❌ Error updating status: "+err.message); }
     };
-    window.deletePiano=async id=>{ if(confirm("Delete?")) await deleteDoc(doc(db,"pianos",id)); };
+    window.deletePiano=async id=>{
+      if(!confirm("Delete?")) return;
+      try { await deleteDoc(doc(db,"pianos",id)); showToast("🗑️ Piano deleted"); }
+      catch(err){ showToast("❌ Error deleting: "+err.message); }
+    };
 
     // Invoice
     window.printInvoice=async (id)=>{
@@ -191,7 +277,7 @@
       `;
       const { jsPDF } = window.jspdf;
       const pdf=new jsPDF();
-      pdf.html(html,{callback:doc=>doc.save(`Invoice_${piano.brand}_${piano.model}.pdf`)});
+      pdf.html(html,{callback:doc=>{doc.save(`Invoice_${piano.brand}_${piano.model}.pdf`); showToast("🧾 Invoice PDF saved");}});
       const w=window.open("","PRINT"); w.document.write(html); w.print();
     };
     window.viewInvoice=async (id)=>{
@@ -199,6 +285,7 @@
       const piano=snap.data();
       const html=`<h2>Invoice Preview</h2><p>${piano.brand||""} ${piano.model||""}</p>`;
       const w=window.open("","VIEW"); w.document.write(html);
+      showToast("👁️ Invoice preview opened");
     };
 
     // Rendering
@@ -206,9 +293,7 @@
     const soldList=document.getElementById("sold-list");
     const deliveredList=document.getElementById("delivered-list");
     const archiveList=document.getElementById("archive-list");
-
-    let docsCache=[];
-    let currentTab="active";
+    let docsCache=[]; let currentTab="active";
 
     function render(){
       activeList.innerHTML=""; soldList.innerHTML=""; deliveredList.innerHTML=""; archiveList.innerHTML="";
@@ -220,39 +305,43 @@
       const q=document.getElementById("searchBox").value.toLowerCase();
       const loc=document.getElementById("filterLocation").value;
       let filtered=docsCache.filter(d=>{
-        return (!q|| (d.brand||"").toLowerCase().includes(q)||(d.model||"").toLowerCase().includes(q)||(d.notes||"").toLowerCase().includes(q)) &&
-               (!loc||d.location===loc);
+        const matchesText = (!q|| (d.brand||"").toLowerCase().includes(q)||(d.model||"").toLowerCase().includes(q)||(d.notes||"").toLowerCase().includes(q));
+        const matchesLoc = (!loc||d.location===loc);
+        return matchesText && matchesLoc;
       });
 
       for(const d of filtered){
         const c=document.createElement("div");
         c.className="card";
-        c.innerHTML=`<h3>${d.brand||""} ${d.model||""}</h3><div class="meta">Status: ${d.status||"active"}</div>`;
+        if(d.photoURL){
+          c.innerHTML+=`<img src="${d.photoURL}" style="width:100%;max-height:180px;object-fit:cover;border-radius:6px;margin-bottom:8px;cursor:pointer;" onclick="openPreview('${d.photoURL}')">`;
+        }
+        c.innerHTML+=`<h3>${d.brand||""} ${d.model||""}</h3>
+                      <div class="meta">Status: ${d.status||"active"}${d.year?` • Year ${d.year}`:""}${d.color?` • ${d.color}`:""}${d.location?` • ${d.location}`:""}</div>`;
         let actions="";
         if(d.status==="active"){
-          actions=`<button class="blue" onclick="openSellModal('${d._id}')">Sell</button>`;
+          actions = `<button class="blue" onclick="openSellModal('${d._id}')">Sell</button>`;
           activeList.appendChild(c);
-        }
-        else if(d.status==="sold"){
-          c.innerHTML+=`<p><strong>Salesman:</strong> ${d.salesman||""}</p><p><strong>Delivery To:</strong> ${d.delivery?.name||""}</p>`;
-          actions=`
+        } else if(d.status==="sold"){
+          c.innerHTML+=`
+            <div class="meta"><strong>Salesman:</strong> ${d.salesman||"—"}</div>
+            <div class="meta"><strong>Delivery:</strong> ${(d.delivery?.name||"—")} ${(d.delivery?.address?("• "+d.delivery.address):"")} ${(d.delivery?.phone?("• "+d.delivery.phone):"")}</div>`;
+          actions = `
             <button class="green" onclick="updateStatus('${d._id}','delivered')">Mark Delivered</button>
             <button class="gray" onclick="printInvoice('${d._id}')">Print Invoice</button>
             <button class="gray" onclick="viewInvoice('${d._id}')">View Invoice</button>
           `;
           soldList.appendChild(c);
-        }
-        else if(d.status==="delivered"){
-          c.innerHTML+=`<p><strong>Delivered:</strong> ${d.deliveredAt?.toDate?d.deliveredAt.toDate().toLocaleDateString():""}</p>`;
-          actions=`
+        } else if(d.status==="delivered"){
+          c.innerHTML+=`<div class="meta"><strong>Delivered:</strong> ${d.deliveredAt?.toDate ? d.deliveredAt.toDate().toLocaleDateString() : "—"}</div>`;
+          actions = `
             <button class="orange" onclick="updateStatus('${d._id}','archive')">Archive</button>
             <button class="gray" onclick="printInvoice('${d._id}')">Print Invoice</button>
             <button class="gray" onclick="viewInvoice('${d._id}')">View Invoice</button>
           `;
           deliveredList.appendChild(c);
-        }
-        else if(d.status==="archive"){
-          actions=`
+        } else if(d.status==="archive"){
+          actions = `
             <button class="green" onclick="updateStatus('${d._id}','active')">Reopen</button>
             <button class="red" onclick="deletePiano('${d._id}')">Delete</button>
             <button class="gray" onclick="printInvoice('${d._id}')">Print Invoice</button>
@@ -264,10 +353,20 @@
       }
     }
 
-    document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{ document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active"); currentTab=t.dataset.tab; render(); });
+    // Tab switching
+    document.querySelectorAll(".tab").forEach(t=>{
+      t.onclick=()=>{
+        document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+        t.classList.add("active");
+        currentTab=t.dataset.tab;
+        render();
+      };
+    });
+
     document.getElementById("searchBox").addEventListener("input",()=>render());
     document.getElementById("filterLocation").addEventListener("change",()=>render());
 
+    // Live updates
     onSnapshot(query(collection(db,"pianos"),orderBy("createdAt","desc")),snap=>{
       docsCache=snap.docs.map(d=>({...d.data(),_id:d.id}));
       render();
