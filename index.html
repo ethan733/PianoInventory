@@ -31,7 +31,6 @@
     #sold-summary .row > div { min-width:220px; }
     .muted { color:#666; }
 
-    /* Dark mode */
     body.dark { background:#121212; color:#eaeaea; }
     body.dark h1 { color:#fff; }
     body.dark .card { background:#1e1e1e; border-color:#333; }
@@ -43,7 +42,6 @@
     body.dark button { opacity:0.9; }
     body.dark #sold-summary { background:#1e1e1e; border-color:#333; }
 
-    /* Modal */
     .modal { display:flex; justify-content:center; align-items:center;
       position:fixed; top:0; left:0; width:100%; height:100%;
       background:rgba(0,0,0,0.6); z-index:1000; }
@@ -53,24 +51,19 @@
       max-height:90%; overflow-y:auto; position:relative;
     }
     .modal-content h2 { margin-top:0; }
-    .close {
-      position:absolute; top:10px; right:15px; font-size:22px; cursor:pointer;
-    }
+    .close { position:absolute; top:10px; right:15px; font-size:22px; cursor:pointer; }
     body.dark .modal-content { background:#1e1e1e; color:#fff; }
     form input, form textarea, form select { width:100%; margin:6px 0; padding:8px; border:1px solid #ccc; border-radius:6px; }
 
-    /* Image preview modal */
     #imgPreviewModal .modal-content { background:none; box-shadow:none; padding:0; }
   </style>
 </head>
 <body>
   <h1>🎹 Piano Inventory</h1>
 
-  <!-- Controls -->
   <button id="darkToggle" class="gray" style="margin-bottom:15px;">🌙 Toggle Dark Mode</button>
   <button id="openModal" class="green" style="margin-bottom:15px; margin-left:10px;">➕ Add Piano</button>
 
-  <!-- Auth -->
   <div>
     <input type="email" id="email" placeholder="Email">
     <input type="password" id="password" placeholder="Password">
@@ -79,14 +72,12 @@
     <span id="whoami" class="muted"></span>
   </div>
 
-  <!-- Tabs -->
   <div class="tabs">
     <div class="tab active" data-tab="active">Active</div>
     <div class="tab" data-tab="sold">Sold</div>
     <div class="tab" data-tab="archive">Archive</div>
   </div>
 
-  <!-- Filters -->
   <div class="filters">
     <label for="sortBy">Sort: </label>
     <select id="sortBy">
@@ -101,7 +92,6 @@
     </select>
   </div>
 
-  <!-- Sold summary -->
   <div id="sold-summary" class="hidden">
     <strong>Sold Summary</strong>
     <div class="row">
@@ -112,12 +102,10 @@
     </div>
   </div>
 
-  <!-- Lists -->
   <div id="active-list" class="grid"></div>
   <div id="sold-list" class="grid hidden"></div>
   <div id="archive-list" class="grid hidden"></div>
 
-  <!-- Piano Form Modal -->
   <div id="pianoModal" class="modal hidden">
     <div class="modal-content">
       <span id="closeModal" class="close">&times;</span>
@@ -148,7 +136,6 @@
     </div>
   </div>
 
-  <!-- Image Preview Modal -->
   <div id="imgPreviewModal" class="modal hidden">
     <div class="modal-content" style="max-width:90%; max-height:90%;">
       <span id="closeImgPreview" class="close" style="color:white; font-size:30px; right:20px;">&times;</span>
@@ -158,7 +145,6 @@
 
   <div id="toast"></div>
 
-  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
@@ -193,7 +179,6 @@
     loginBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,password.value).catch(e=>showToast(e.message));
     logoutBtn.onclick=()=>signOut(auth);
 
-    // Dark mode toggle
     const darkToggle=document.getElementById("darkToggle");
     darkToggle.addEventListener("click",()=>{
       document.body.classList.toggle("dark");
@@ -201,7 +186,6 @@
     });
     if(localStorage.getItem("darkMode")==="on"){ document.body.classList.add("dark"); }
 
-    // Modals
     const modal=document.getElementById("pianoModal");
     const openModal=document.getElementById("openModal");
     const closeModal=document.getElementById("closeModal");
@@ -216,13 +200,11 @@
     closeImgPreview.onclick=()=>imgPreviewModal.classList.add("hidden");
     window.openPreview=openPreview;
 
-    // State
     let docsCache=[];
     let currentTab="active";
 
     function resetForm(){ pianoForm.reset(); editingId.value=""; currentPhotoURL.value=""; submitBtn.textContent="Add Piano"; submitBtn.classList.remove("orange"); submitBtn.classList.add("green"); cancelEditBtn.classList.add("hidden"); }
 
-    // ✅ setEdit with photo support
     function setEdit(id,data){
       editingId.value = id;
       brand.value = data.brand || "";
@@ -236,7 +218,7 @@
       soldPrice.value = data.soldPrice != null ? data.soldPrice : "";
       archiveReason.value = data.archiveReason || "";
       notes.value = data.notes || "";
-      currentPhotoURL.value = data.photoURL || "";  // store existing photo URL
+      currentPhotoURL.value = data.photoURL || "";
 
       submitBtn.textContent = "Save Changes";
       submitBtn.classList.remove("green");
@@ -245,10 +227,8 @@
       modal.classList.remove("hidden");
       modalTitle.textContent = "Edit Piano";
     }
-
     cancelEditBtn.onclick=resetForm;
 
-    // Save piano
     pianoForm.addEventListener("submit",async e=>{
       e.preventDefault();
       if(!currentUser){ showToast("Sign in required"); return; }
@@ -266,21 +246,10 @@
         archiveReason: archiveReason.value || null,
         notes: notes.value || null
       };
-
-      let photoURL = currentPhotoURL.value || "";
-      if(photo.files[0]){ 
-        const r=ref(storage,"piano_photos/"+Date.now()+"_"+photo.files[0].name); 
-        await uploadBytes(r,photo.files[0]); 
-        photoURL=await getDownloadURL(r); 
-      }
-      if(id){ 
-        const refDoc=doc(db,"pianos",id); 
-        await updateDoc(refDoc,{...data, photoURL}); 
-        showToast("Updated"); 
-      } else { 
-        await addDoc(collection(db,"pianos"),{...data,photoURL:photoURL||"",status:"active",createdAt:serverTimestamp()}); 
-        showToast("Added"); 
-      }
+      let photoURL=currentPhotoURL.value || "";
+      if(photo.files[0]){ const r=ref(storage,"piano_photos/"+Date.now()+"_"+photo.files[0].name); await uploadBytes(r,photo.files[0]); photoURL=await getDownloadURL(r); }
+      if(id){ await updateDoc(doc(db,"pianos",id),{...data,photoURL}); showToast("Updated"); }
+      else { await addDoc(collection(db,"pianos"),{...data,photoURL:photoURL||"",status:"active",createdAt:serverTimestamp()}); showToast("Added"); }
       resetForm(); modal.classList.add("hidden");
     });
 
@@ -288,8 +257,44 @@
     async function deletePiano(id){ if(currentUser&&confirm("Delete this piano?")) await deleteDoc(doc(db,"pianos",id)); }
     window.updateStatus=updateStatus; window.deletePiano=deletePiano; window.__setEdit=async id=>{ const snap=await getDoc(doc(db,"pianos",id)); if(snap.exists())setEdit(id,snap.data()); };
 
-    // Render (same as before) ...
-    // [keep your render() and listeners code here, unchanged]
+    const activeListEl=document.getElementById("active-list");
+    const soldListEl=document.getElementById("sold-list");
+    const archiveListEl=document.getElementById("archive-list");
+    const soldSummaryEl=document.getElementById("sold-summary");
+    const sumSalesEl=document.getElementById("sumSales");
+    const sumCostEl=document.getElementById("sumCost");
+    const sumProfitEl=document.getElementById("sumProfit");
+    const sumCommEl=document.getElementById("sumComm");
+    const sortByEl=document.getElementById("sortBy");
+
+    function render(){
+      activeListEl.innerHTML=""; soldListEl.innerHTML=""; archiveListEl.innerHTML="";
+      activeListEl.classList.toggle("hidden",currentTab!=="active");
+      soldListEl.classList.toggle("hidden",currentTab!=="sold");
+      archiveListEl.classList.toggle("hidden",currentTab!=="archive");
+      soldSummaryEl.classList.toggle("hidden",currentTab!=="sold");
+
+      let filtered=[...docsCache];
+      const q=document.getElementById("searchBox").value.toLowerCase();
+      if(q){ filtered=filtered.filter(d=>(d.brand||"").toLowerCase().includes(q)||(d.model||"").toLowerCase().includes(q)||(d.notes||"").toLowerCase().includes(q)||(d.year?.toString()||"").includes(q)); }
+      const loc=document.getElementById("filterLocation").value;
+      if(loc){ filtered=filtered.filter(d=>d.location===loc); }
+
+      const sortBy=sortByEl.value;
+      if(sortBy==="profit"){ filtered.sort((a,b)=>{const ap=(a.soldPrice??a.listingPrice??0)-(a.cost??0);const bp=(b.soldPrice??b.listingPrice??0)-(b.cost??0);return bp-ap;}); }
+      else { filtered.sort((a,b)=>{const at=a.createdAt?.toMillis?.()||0;const bt=b.createdAt?.toMillis?.()||0;return bt-at;}); }
+
+      if(currentTab==="sold"){ let totalSales=0,totalCost=0,totalProfit=0,totalComm=0; for(const d of filtered.filter(x=>(x.status||"active")==="sold")){ const sp=(d.soldPrice!=null?d.soldPrice:d.listingPrice)||0; const c=d.cost||0; const profit=(sp&&d.cost!=null)?sp-c:null; const comm=profit!=null?profit*0.15:null; totalSales+=sp; totalCost+=c; if(profit!=null)totalProfit+=profit; if(comm!=null)totalComm+=comm; } sumSalesEl.textContent=money(totalSales); sumCostEl.textContent=money(totalCost); sumProfitEl.textContent=money(totalProfit); sumCommEl.textContent=money(totalComm); }
+
+      for(const d of filtered){ const c=document.createElement("div"); c.className="card"; let extra=""; if((d.status||"active")==="sold"&&d.soldAt?.toDate){ const sp=d.soldPrice!=null?d.soldPrice:d.listingPrice; const profit=(sp!=null&&d.cost!=null)?sp-d.cost:null; const commission=(profit!=null)?profit*0.15:null; extra=`<div><strong>Buying Cost:</strong> ${money(d.cost)}</div><div><strong>Listing Price:</strong> ${money(d.listingPrice)}</div><div><strong>Sold Price:</strong> ${money(sp)}</div><div><strong>Profit:</strong> ${profit!=null?money(profit):"—"}</div><div><strong>Commission (15%):</strong> ${commission!=null?money(commission):"—"}</div><div><strong>Sold on:</strong> ${d.soldAt.toDate().toLocaleDateString()}</div>`; } if((d.status||"active")==="archive"&&d.archivedAt?.toDate){ extra=`<div><strong>Archived on:</strong> ${d.archivedAt.toDate().toLocaleDateString()} ${d.archiveReason?("— "+d.archiveReason):""}</div>`; } c.innerHTML=`${d.photoURL?`<div><img src="${d.photoURL}" alt="photo" style="width:100%; max-height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer;" onclick="openPreview('${d.photoURL}')"></div>`:""}<h3>${(d.brand||"")+(d.model?" "+d.model:"")}</h3><div class="meta">Status: ${d.status||"active"}${d.year?" • Year "+d.year:""}${d.color?" • "+d.color:""}${d.location?" • "+d.location:""}</div>${d.notes?`<div class="meta">${d.notes}</div>`:""}${extra}<div class="actions">${currentUser?`${(d.status||"active")!=="sold"?`<button class="blue" onclick="updateStatus('${d._id}','sold')">Sell</button>`:""}${(d.status||"active")!=="archive"?`<button class="gray" onclick="updateStatus('${d._id}','archive')">Archive</button>`:""}${(d.status||"active")!=="active"?`<button class="green" onclick="updateStatus('${d._id}','active')">Activate</button>`:""}<button class="orange" onclick='(function(){ window.__setEdit("${d._id}"); })()'>Edit</button><button class="red" onclick="deletePiano('${d._id}')">Delete</button>`:""}</div>`; if((d.status||"active")==="active")activeListEl.appendChild(c); if((d.status||"active")==="sold")soldListEl.appendChild(c); if((d.status||"active")==="archive")archiveListEl.appendChild(c); }
+    }
+
+    document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{ document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active"); currentTab=t.dataset.tab; render(); });
+    sortByEl.addEventListener("change",()=>render());
+    document.getElementById("searchBox").addEventListener("input",()=>render());
+    document.getElementById("filterLocation").addEventListener("change",()=>render());
+
+    onSnapshot(query(collection(db,"pianos"),orderBy("createdAt","desc")),snap=>{ docsCache=snap.docs.map(d=>({...d.data(),_id:d.id})); render(); });
   </script>
 </body>
 </html>
