@@ -179,6 +179,7 @@
     loginBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,password.value).catch(e=>showToast(e.message));
     logoutBtn.onclick=()=>signOut(auth);
 
+    // Dark mode toggle
     const darkToggle=document.getElementById("darkToggle");
     darkToggle.addEventListener("click",()=>{
       document.body.classList.toggle("dark");
@@ -186,6 +187,7 @@
     });
     if(localStorage.getItem("darkMode")==="on"){ document.body.classList.add("dark"); }
 
+    // Modal
     const modal=document.getElementById("pianoModal");
     const openModal=document.getElementById("openModal");
     const closeModal=document.getElementById("closeModal");
@@ -193,12 +195,32 @@
     openModal.onclick=()=>{ modal.classList.remove("hidden"); resetForm(); modalTitle.textContent="Add Piano"; }
     closeModal.onclick=()=>modal.classList.add("hidden");
 
+    // Image preview
     const imgPreviewModal=document.getElementById("imgPreviewModal");
     const previewImg=document.getElementById("previewImg");
     const closeImgPreview=document.getElementById("closeImgPreview");
     function openPreview(src){ previewImg.src=src; imgPreviewModal.classList.remove("hidden"); }
     closeImgPreview.onclick=()=>imgPreviewModal.classList.add("hidden");
     window.openPreview=openPreview;
+
+    // ✅ Explicit DOM bindings
+    const pianoForm       = document.getElementById("pianoForm");
+    const editingId       = document.getElementById("editingId");
+    const brand           = document.getElementById("brand");
+    const model           = document.getElementById("model");
+    const year            = document.getElementById("year");
+    const color           = document.getElementById("color");
+    const lengthInput     = document.getElementById("length");
+    const locationInput   = document.getElementById("location");
+    const cost            = document.getElementById("cost");
+    const listingPrice    = document.getElementById("listingPrice");
+    const soldPrice       = document.getElementById("soldPrice");
+    const archiveReason   = document.getElementById("archiveReason");
+    const notes           = document.getElementById("notes");
+    const photo           = document.getElementById("photo");
+    const currentPhotoURL = document.getElementById("currentPhotoURL");
+    const submitBtn       = document.getElementById("submitBtn");
+    const cancelEditBtn   = document.getElementById("cancelEditBtn");
 
     let docsCache=[];
     let currentTab="active";
@@ -211,8 +233,8 @@
       model.value = data.model || "";
       year.value = data.year != null ? data.year : "";
       color.value = data.color || "";
-      length.value = data.length || "";
-      location.value = data.location || "Gallery";
+      lengthInput.value = data.length || "";
+      locationInput.value = data.location || "Gallery";
       cost.value = data.cost != null ? data.cost : "";
       listingPrice.value = data.listingPrice != null ? data.listingPrice : "";
       soldPrice.value = data.soldPrice != null ? data.soldPrice : "";
@@ -238,8 +260,8 @@
         model: model.value || null,
         year: year.value ? +year.value : null,
         color: color.value || null,
-        length: length.value || null,
-        location: location.value || null,
+        length: lengthInput.value || null,
+        location: locationInput.value || null,
         cost: cost.value ? +cost.value : null,
         listingPrice: listingPrice.value ? +listingPrice.value : null,
         soldPrice: soldPrice.value ? +soldPrice.value : null,
