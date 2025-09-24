@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <title>Piano Inventory</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- HEIC to JPG conversion library -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
+
   <style>
     body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:20px; color:#111; }
     h1 { margin:0 0 20px; }
@@ -106,6 +110,7 @@
   <div id="sold-list" class="grid hidden"></div>
   <div id="archive-list" class="grid hidden"></div>
 
+  <!-- Add/Edit Modal -->
   <div id="pianoModal" class="modal hidden">
     <div class="modal-content">
       <span id="closeModal" class="close">&times;</span>
@@ -126,6 +131,7 @@
         <input type="text" id="archiveReason" placeholder="Archive Reason (if archived)">
         <textarea id="notes" placeholder="Notes"></textarea>
         <input type="file" id="photo" accept="image/*">
+        <img id="photoPreview" src="" alt="Preview" style="max-width:100%; margin-top:10px; border-radius:6px; display:none;">
         <input type="hidden" id="editingId">
         <input type="hidden" id="currentPhotoURL">
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -136,6 +142,7 @@
     </div>
   </div>
 
+  <!-- Image Preview Modal -->
   <div id="imgPreviewModal" class="modal hidden">
     <div class="modal-content" style="max-width:90%; max-height:90%;">
       <span id="closeImgPreview" class="close" style="color:white; font-size:30px; right:20px;">&times;</span>
@@ -195,7 +202,7 @@
     openModal.onclick=()=>{ modal.classList.remove("hidden"); resetForm(); modalTitle.textContent="Add Piano"; }
     closeModal.onclick=()=>modal.classList.add("hidden");
 
-    // Image preview
+    // Image preview modal
     const imgPreviewModal=document.getElementById("imgPreviewModal");
     const previewImg=document.getElementById("previewImg");
     const closeImgPreview=document.getElementById("closeImgPreview");
@@ -203,7 +210,7 @@
     closeImgPreview.onclick=()=>imgPreviewModal.classList.add("hidden");
     window.openPreview=openPreview;
 
-    // ✅ Explicit DOM bindings
+    // DOM bindings
     const pianoForm       = document.getElementById("pianoForm");
     const editingId       = document.getElementById("editingId");
     const brand           = document.getElementById("brand");
@@ -218,6 +225,7 @@
     const archiveReason   = document.getElementById("archiveReason");
     const notes           = document.getElementById("notes");
     const photo           = document.getElementById("photo");
+    const photoPreview    = document.getElementById("photoPreview");
     const currentPhotoURL = document.getElementById("currentPhotoURL");
     const submitBtn       = document.getElementById("submitBtn");
     const cancelEditBtn   = document.getElementById("cancelEditBtn");
@@ -225,7 +233,17 @@
     let docsCache=[];
     let currentTab="active";
 
-    function resetForm(){ pianoForm.reset(); editingId.value=""; currentPhotoURL.value=""; submitBtn.textContent="Add Piano"; submitBtn.classList.remove("orange"); submitBtn.classList.add("green"); cancelEditBtn.classList.add("hidden"); }
+    function resetForm(){
+      pianoForm.reset();
+      editingId.value="";
+      currentPhotoURL.value="";
+      photoPreview.src="";
+      photoPreview.style.display="none";
+      submitBtn.textContent="Add Piano";
+      submitBtn.classList.remove("orange");
+      submitBtn.classList.add("green");
+      cancelEditBtn.classList.add("hidden");
+    }
 
     function setEdit(id,data){
       editingId.value = id;
@@ -242,6 +260,15 @@
       notes.value = data.notes || "";
       currentPhotoURL.value = data.photoURL || "";
 
+      // show preview of existing photo
+      if(data.photoURL){
+        photoPreview.src = data.photoURL;
+        photoPreview.style.display = "block";
+      } else {
+        photoPreview.src = "";
+        photoPreview.style.display = "none";
+      }
+
       submitBtn.textContent = "Save Changes";
       submitBtn.classList.remove("green");
       submitBtn.classList.add("orange");
@@ -251,6 +278,31 @@
     }
     cancelEditBtn.onclick=resetForm;
 
+    // Show preview when selecting a file (with HEIC conversion)
+    photo.addEventListener("change", async () => {
+      let file = photo.files[0];
+      if(!file){
+        photoPreview.src="";
+        photoPreview.style.display="none";
+        return;
+      }
+      if(file.type === "image/heic" || file.name.toLowerCase().endsWith(".heic")){
+        try {
+          const converted = await heic2any({ blob: file, toType: "image/jpeg" });
+          file = new File([converted], file.name.replace(/\.heic$/i, ".jpg"), { type: "image/jpeg" });
+        } catch(err){
+          showToast("HEIC preview failed: " + err.message);
+        }
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        photoPreview.src = e.target.result;
+        photoPreview.style.display="block";
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Save piano
     pianoForm.addEventListener("submit",async e=>{
       e.preventDefault();
       if(!currentUser){ showToast("Sign in required"); return; }
@@ -269,7 +321,20 @@
         notes: notes.value || null
       };
       let photoURL=currentPhotoURL.value || "";
-      if(photo.files[0]){ const r=ref(storage,"piano_photos/"+Date.now()+"_"+photo.files[0].name); await uploadBytes(r,photo.files[0]); photoURL=await getDownloadURL(r); }
+      if(photo.files[0]){
+        let file = photo.files[0];
+        if(file.type === "image/heic" || file.name.toLowerCase().endsWith(".heic")){
+          try {
+            const converted = await heic2any({ blob: file, toType: "image/jpeg" });
+            file = new File([converted], file.name.replace(/\.heic$/i, ".jpg"), { type: "image/jpeg" });
+          } catch(err){
+            showToast("HEIC conversion failed: " + err.message);
+          }
+        }
+        const r=ref(storage,"piano_photos/"+Date.now()+"_"+file.name);
+        await uploadBytes(r,file);
+        photoURL=await getDownloadURL(r);
+      }
       if(id){ await updateDoc(doc(db,"pianos",id),{...data,photoURL}); showToast("Updated"); }
       else { await addDoc(collection(db,"pianos"),{...data,photoURL:photoURL||"",status:"active",createdAt:serverTimestamp()}); showToast("Added"); }
       resetForm(); modal.classList.add("hidden");
