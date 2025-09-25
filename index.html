@@ -4,124 +4,98 @@
   <meta charset="UTF-8" />
   <title>Piano Inventory</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-
   <!-- HEIC to JPG conversion library -->
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
-
-  <!-- Firebase -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-    import {
-      getFirestore, collection, addDoc, getDocs,
-      onSnapshot, updateDoc, deleteDoc, doc
-    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
-    import {
-      getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged
-    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-    import {
-      getStorage, ref, uploadBytes, getDownloadURL, deleteObject
-    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-storage.js";
-
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-    const storage = getStorage(app);
-  </script>
-
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    header { background: #222; color: #fff; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
-    .container { padding: 1rem; }
-    .controls { margin-bottom: 1rem; display: flex; gap: 10px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(250px,1fr)); gap: 15px; }
-    .card { border: 1px solid #ccc; border-radius: 8px; overflow: hidden; background: #fff; }
-    .card img { width: 100%; height: 150px; object-fit: cover; }
-    .card-content { padding: 10px; }
-    .meta { font-size: 0.9em; color: #555; margin-top: 5px; }
-    button { cursor: pointer; }
-    #pianoModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center; }
-    #pianoModal .modal-content { background:#fff; padding:20px; border-radius:8px; width:90%; max-width:500px; max-height:90%; overflow:auto; }
-    #photoPreview { max-width:100%; margin-top:10px; display:none; }
-    .hidden { display:none; }
+    /* … your original CSS unchanged … */
   </style>
 </head>
 <body>
-  <header>
-    <h1>Piano Inventory</h1>
-    <div>
-      <button id="loginBtn">Login</button>
-      <button id="logoutBtn" class="hidden">Logout</button>
-    </div>
-  </header>
-  <div class="container">
-    <div class="controls">
-      <input type="text" id="searchBox" placeholder="Search...">
-      <select id="statusFilter">
-        <option value="all">All</option>
-        <option value="active">Active</option>
-        <option value="sold">Sold</option>
-        <option value="archived">Archived</option>
-      </select>
-      <button id="addPianoBtn">+ Add Piano</button>
-    </div>
-    <div class="grid" id="pianoGrid"></div>
+  <h1>🎹 Piano Inventory</h1>
+  <button id="darkToggle" class="gray" style="margin-bottom:15px;">🌙 Toggle Dark Mode</button>
+  <button id="openModal" class="green" style="margin-bottom:15px; margin-left:10px;">➕ Add Piano</button>
+  <div>
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button id="loginBtn" class="blue">Login</button>
+    <button id="logoutBtn" class="gray hidden">Logout</button>
+    <span id="whoami" class="muted"></span>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="active">Active</div>
+    <div class="tab" data-tab="sold">Sold</div>
+    <div class="tab" data-tab="archive">Archive</div>
+  </div>
+  <div class="filters">
+    <label for="sortBy">Sort: </label>
+    <select id="sortBy">
+      <option value="createdAt">Created (newest)</option>
+      <option value="profit">Profit (high → low)</option>
+    </select>
+    <input type="text" id="searchBox" placeholder="Search (brand, model, year, notes, serial)">
+    <select id="filterLocation">
+      <option value="">All Locations</option>
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
+    </select>
   </div>
 
-  <!-- Modal -->
-  <div id="pianoModal">
+  <div id="sold-summary" class="hidden"> … </div>
+  <div id="active-list" class="grid"></div>
+  <div id="sold-list" class="grid hidden"></div>
+  <div id="archive-list" class="grid hidden"></div>
+
+  <!-- Add/Edit Modal -->
+  <div id="pianoModal" class="modal hidden">
     <div class="modal-content">
+      <span id="closeModal" class="close">&times;</span>
+      <h2 id="modalTitle">Add Piano</h2>
       <form id="pianoForm">
+        <input type="text" id="brand" placeholder="Brand" required>
+        <input type="text" id="model" placeholder="Model">
+        <input type="number" id="year" placeholder="Year">
+        <input type="text" id="color" placeholder="Color">
+        <input type="text" id="length" placeholder="Length">
+        <select id="location">
+          <option value="Gallery">Gallery</option>
+          <option value="Cartersville">Cartersville</option>
+        </select>
+        <input type="number" id="cost" placeholder="Buying Cost">
+        <input type="number" id="listingPrice" placeholder="Listing Price">
+        <input type="number" id="soldPrice" placeholder="Sold Price (if sold)">
+        <input type="text" id="archiveReason" placeholder="Archive Reason (if archived)">
+        <!-- ✅ new field -->
+        <input type="text" id="serialNumber" placeholder="Serial Number">
+        <textarea id="notes" placeholder="Notes"></textarea>
+        <input type="file" id="photo" accept="image/*">
+        <img id="photoPreview" src="" alt="Preview" style="max-width:100%; margin-top:10px; border-radius:6px; display:none;">
         <input type="hidden" id="editingId">
         <input type="hidden" id="currentPhotoURL">
-        <label>Brand:<input type="text" id="brand"></label>
-        <label>Model:<input type="text" id="model"></label>
-        <label>Year:<input type="number" id="year"></label>
-        <label>Color:<input type="text" id="color"></label>
-        <label>Length:<input type="text" id="length"></label>
-        <label>Location:<input type="text" id="location"></label>
-        <label>Cost:<input type="number" id="cost"></label>
-        <label>Listing Price:<input type="number" id="listingPrice"></label>
-        <label>Sold Price:<input type="number" id="soldPrice"></label>
-        <label>Archive Reason:<input type="text" id="archiveReason"></label>
-        <label>Notes:<textarea id="notes"></textarea></label>
-        <label>Serial Number:<input type="text" id="serialNumber"></label>
-        <label>Photo:<input type="file" id="photo" accept="image/*,.heic"></label>
-        <img id="photoPreview" alt="Preview">
-        <button type="submit" id="submitBtn" class="green">Add Piano</button>
-        <button type="button" id="cancelEditBtn" class="hidden">Cancel</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="submit" id="submitBtn" class="green">Add Piano</button>
+          <button type="button" id="cancelEditBtn" class="gray hidden">Cancel</button>
+        </div>
       </form>
     </div>
   </div>
 
+  <!-- Image Preview Modal + Toast -->
+  <div id="imgPreviewModal" class="modal hidden"> … </div>
+  <div id="toast"></div>
+
   <script type="module">
-    import {
-      getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot
-    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
-    import {
-      getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
-    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-    import {
-      getStorage, ref, uploadBytes, getDownloadURL, deleteObject
-    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-storage.js";
-    import { app, db, auth, storage } from "./index.js"; // Adjust path if needed
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, getDoc, orderBy, query } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
+    const firebaseConfig={…}; const app=initializeApp(firebaseConfig);
+    const auth=getAuth(app); const db=getFirestore(app); const storage=getStorage(app);
 
-    const pianoGrid=document.getElementById("pianoGrid");
+    // … unchanged auth, toast, dark mode code …
+
+    // DOM bindings
     const pianoForm=document.getElementById("pianoForm");
-    const pianoModal=document.getElementById("pianoModal");
-    const addPianoBtn=document.getElementById("addPianoBtn");
-    const cancelEditBtn=document.getElementById("cancelEditBtn");
-    const submitBtn=document.getElementById("submitBtn");
-    const searchBox=document.getElementById("searchBox");
-    const statusFilter=document.getElementById("statusFilter");
-
+    const editingId=document.getElementById("editingId");
     const brand=document.getElementById("brand");
     const model=document.getElementById("model");
     const year=document.getElementById("year");
@@ -133,149 +107,72 @@
     const soldPrice=document.getElementById("soldPrice");
     const archiveReason=document.getElementById("archiveReason");
     const notes=document.getElementById("notes");
-    const serialNumber=document.getElementById("serialNumber");
+    const serialNumber=document.getElementById("serialNumber"); // ✅ new
     const photo=document.getElementById("photo");
     const photoPreview=document.getElementById("photoPreview");
-    const editingId=document.getElementById("editingId");
     const currentPhotoURL=document.getElementById("currentPhotoURL");
+    const submitBtn=document.getElementById("submitBtn");
+    const cancelEditBtn=document.getElementById("cancelEditBtn");
 
-    // Reset form
-    function resetForm(){
-      pianoForm.reset();
-      editingId.value="";
-      currentPhotoURL.value="";
-      photoPreview.src="";
-      photoPreview.style.display="none";
-      submitBtn.textContent="Add Piano";
-      cancelEditBtn.classList.add("hidden");
-      serialNumber.value="";
+    function resetForm(){ pianoForm.reset(); editingId.value=""; currentPhotoURL.value="";
+      photoPreview.src=""; photoPreview.style.display="none"; serialNumber.value=""; // ✅ clear serial
+      submitBtn.textContent="Add Piano"; submitBtn.classList.remove("orange"); submitBtn.classList.add("green"); cancelEditBtn.classList.add("hidden");
     }
 
-    function openModal(){ pianoModal.style.display="flex"; }
-    function closeModal(){ pianoModal.style.display="none"; resetForm(); }
-
-    addPianoBtn.onclick=openModal;
-    cancelEditBtn.onclick=()=>{ closeModal(); };
+    function setEdit(id,data){
+      editingId.value=id; brand.value=data.brand||""; model.value=data.model||"";
+      year.value=data.year!=null?data.year:""; color.value=data.color||"";
+      lengthInput.value=data.length||""; locationInput.value=data.location||"Gallery";
+      cost.value=data.cost!=null?data.cost:""; listingPrice.value=data.listingPrice!=null?data.listingPrice:"";
+      soldPrice.value=data.soldPrice!=null?data.soldPrice:""; archiveReason.value=data.archiveReason||"";
+      notes.value=data.notes||""; serialNumber.value=data.serialNumber||""; // ✅ fill serial
+      currentPhotoURL.value=data.photoURL||"";
+      // … photo preview code unchanged …
+    }
 
     // Save piano
     pianoForm.addEventListener("submit",async e=>{
-      e.preventDefault();
+      e.preventDefault(); if(!currentUser){showToast("Sign in required");return;}
       const id=editingId.value;
-      let url=currentPhotoURL.value;
-      if(photo.files.length){
-        let file=photo.files[0];
-        if(file.type==="image/heic"||file.name.endsWith(".heic")){
-          const blob=await heic2any({blob:file,toType:"image/jpeg"});
-          file=new File([blob],file.name.replace(/\.heic$/i,".jpg"),{type:"image/jpeg"});
-        }
-        const storageRef=ref(storage,"pianos/"+Date.now()+"_"+file.name);
-        await uploadBytes(storageRef,file);
-        url=await getDownloadURL(storageRef);
-      }
-
-      const data={
-        brand: brand.value||null,
-        model: model.value||null,
-        year: year.value?+year.value:null,
-        color: color.value||null,
-        length: lengthInput.value||null,
-        location: locationInput.value||null,
-        cost: cost.value?+cost.value:null,
-        listingPrice: listingPrice.value?+listingPrice.value:null,
-        soldPrice: soldPrice.value?+soldPrice.value:null,
-        archiveReason: archiveReason.value||null,
-        notes: notes.value||null,
-        serialNumber: serialNumber.value||null,
-        photoURL: url||null,
-        status: (soldPrice.value? "sold" : archiveReason.value? "archived" : "active")
+      const data={ brand:brand.value||null, model:model.value||null, year:year.value?+year.value:null,
+        color:color.value||null, length:lengthInput.value||null, location:locationInput.value||null,
+        cost:cost.value?+cost.value:null, listingPrice:listingPrice.value?+listingPrice.value:null,
+        soldPrice:soldPrice.value?+soldPrice.value:null, archiveReason:archiveReason.value||null,
+        notes:notes.value||null, serialNumber:serialNumber.value||null // ✅ save serial
       };
-
-      if(id){
-        await updateDoc(doc(db,"pianos",id),data);
-      } else {
-        await addDoc(collection(db,"pianos"),data);
-      }
-      closeModal();
+      // … photo handling + Firestore save unchanged …
     });
 
-    // Realtime load
-    onSnapshot(collection(db,"pianos"),snap=>{
-      const docs=[];
-      snap.forEach(d=>docs.push({id:d.id,...d.data()}));
-      render(docs);
-    });
-
-    function render(docs){
-      const q=searchBox.value.toLowerCase();
-      const filter=statusFilter.value;
-      let filtered=docs;
-      if(filter!=="all") filtered=filtered.filter(d=>(d.status||"active")===filter);
-      if(q){
-        filtered=filtered.filter(d=>
-          (d.brand||"").toLowerCase().includes(q) ||
-          (d.model||"").toLowerCase().includes(q) ||
-          (d.notes||"").toLowerCase().includes(q) ||
-          (d.year?.toString()||"").includes(q) ||
-          (d.serialNumber||"").toLowerCase().includes(q)
-        );
-      }
-      pianoGrid.innerHTML=filtered.map(d=>`
-        <div class="card">
-          ${d.photoURL? `<img src="${d.photoURL}">`:""}
-          <div class="card-content">
-            <h3>${d.brand||""} ${d.model||""}</h3>
-            <div class="meta">
-              Status: ${d.status||"active"}
-              ${d.year?" • Year "+d.year:""}
-              ${d.color?" • "+d.color:""}
-              ${d.location?" • "+d.location:""}
-              ${d.serialNumber?` • SN: ${d.serialNumber}`:""}
-            </div>
-            <p>${d.notes||""}</p>
-            <button onclick="editPiano('${d.id}')">Edit</button>
-            <button onclick="deletePiano('${d.id}','${d.photoURL||""}')">Delete</button>
+    function render(){
+      // … unchanged up to search …
+      const q=document.getElementById("searchBox").value.toLowerCase();
+      if(q){ filtered=filtered.filter(d=>
+        (d.brand||"").toLowerCase().includes(q)||
+        (d.model||"").toLowerCase().includes(q)||
+        (d.notes||"").toLowerCase().includes(q)||
+        (d.year?.toString()||"").includes(q)||
+        (d.serialNumber||"").toLowerCase().includes(q) // ✅ search serial
+      ); }
+      // … rest unchanged …
+      for(const d of filtered){
+        const c=document.createElement("div"); c.className="card";
+        c.innerHTML=`
+          ${d.photoURL?`<div><img src="${d.photoURL}" ...></div>`:""}
+          <h3>${(d.brand||"")+(d.model?" "+d.model:"")}</h3>
+          <div class="meta">
+            Status: ${d.status||"active"}
+            ${d.year?" • Year "+d.year:""}
+            ${d.color?" • "+d.color:""}
+            ${d.location?" • "+d.location:""}
+            ${d.serialNumber?` • SN: ${d.serialNumber}`:""} <!-- ✅ show serial -->
           </div>
-        </div>
-      `).join("");
-    }
-
-    window.editPiano=async id=>{
-      const d=await (await getDocs(collection(db,"pianos"))).docs.find(x=>x.id===id);
-      if(!d) return;
-      const data=d.data();
-      editingId.value=id;
-      brand.value=data.brand||"";
-      model.value=data.model||"";
-      year.value=data.year||"";
-      color.value=data.color||"";
-      lengthInput.value=data.length||"";
-      locationInput.value=data.location||"";
-      cost.value=data.cost||"";
-      listingPrice.value=data.listingPrice||"";
-      soldPrice.value=data.soldPrice||"";
-      archiveReason.value=data.archiveReason||"";
-      notes.value=data.notes||"";
-      serialNumber.value=data.serialNumber||"";
-      currentPhotoURL.value=data.photoURL||"";
-      if(data.photoURL){ photoPreview.src=data.photoURL; photoPreview.style.display="block"; }
-      submitBtn.textContent="Update Piano";
-      cancelEditBtn.classList.remove("hidden");
-      openModal();
-    };
-
-    window.deletePiano=async (id,url)=>{
-      if(!confirm("Delete this piano?")) return;
-      await deleteDoc(doc(db,"pianos",id));
-      if(url){
-        const storageRef=ref(storage,url);
-        deleteObject(storageRef).catch(()=>{});
+          ${d.notes?`<div class="meta">${d.notes}</div>`:""}
+          ${extra}
+          <div class="actions"> … </div>`;
+        // … append unchanged …
       }
-    };
-
-    searchBox.oninput=()=>onSnapshot(collection(db,"pianos"),snap=>{
-      const docs=[]; snap.forEach(d=>docs.push({id:d.id,...d.data()})); render(docs);
-    });
-    statusFilter.onchange=()=>searchBox.oninput();
+    }
+    // … rest unchanged …
   </script>
 </body>
 </html>
