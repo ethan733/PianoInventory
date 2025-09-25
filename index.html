@@ -8,217 +8,274 @@
   <!-- HEIC to JPG conversion library -->
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
 
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, getDocs,
+      onSnapshot, updateDoc, deleteDoc, doc
+    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+    import {
+      getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+    import {
+      getStorage, ref, uploadBytes, getDownloadURL, deleteObject
+    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-storage.js";
+
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const storage = getStorage(app);
+  </script>
+
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; color:#333; }
-    h1 { margin-bottom: 15px; }
-    #controls { margin-bottom: 20px; }
-    #controls button { margin-right: 10px; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; }
-    #controls input { padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
-    .card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    .card img { border-radius: 6px; }
-    .card h3 { margin: 6px 0; }
-    .card .meta { font-size: 0.9em; color: #555; margin-bottom: 6px; }
-    .actions button { margin-right: 5px; margin-top: 5px; padding: 5px 8px; font-size: 0.85em; border-radius: 5px; cursor: pointer; border:none; }
-    .blue { background:#3498db; color:#fff; }
-    .green { background:#2ecc71; color:#fff; }
-    .red { background:#e74c3c; color:#fff; }
-    .orange { background:#f39c12; color:#fff; }
-    .gray { background:#7f8c8d; color:#fff; }
-    dialog { border: none; border-radius: 10px; padding: 20px; max-width: 500px; width: 90%; }
-    dialog::backdrop { background: rgba(0,0,0,0.4); }
-    form label { display: block; margin-top: 10px; font-weight: bold; }
-    form input, form select, form textarea { width: 100%; padding: 6px; margin-top: 3px; border-radius: 6px; border: 1px solid #ccc; }
-    form textarea { resize: vertical; }
-    .preview-img { max-width: 100%; margin-top: 10px; border-radius: 6px; }
-    #imgPreview { cursor:pointer; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    header { background: #222; color: #fff; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .container { padding: 1rem; }
+    .controls { margin-bottom: 1rem; display: flex; gap: 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(250px,1fr)); gap: 15px; }
+    .card { border: 1px solid #ccc; border-radius: 8px; overflow: hidden; background: #fff; }
+    .card img { width: 100%; height: 150px; object-fit: cover; }
+    .card-content { padding: 10px; }
+    .meta { font-size: 0.9em; color: #555; margin-top: 5px; }
+    button { cursor: pointer; }
+    #pianoModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center; }
+    #pianoModal .modal-content { background:#fff; padding:20px; border-radius:8px; width:90%; max-width:500px; max-height:90%; overflow:auto; }
+    #photoPreview { max-width:100%; margin-top:10px; display:none; }
+    .hidden { display:none; }
   </style>
 </head>
 <body>
-  <h1>🎹 Piano Inventory</h1>
-  <div id="controls">
-    <button onclick="openAddModal()">➕ Add Piano</button>
-    <input type="text" id="search" placeholder="Search by brand, model, serial, notes...">
+  <header>
+    <h1>Piano Inventory</h1>
+    <div>
+      <button id="loginBtn">Login</button>
+      <button id="logoutBtn" class="hidden">Logout</button>
+    </div>
+  </header>
+  <div class="container">
+    <div class="controls">
+      <input type="text" id="searchBox" placeholder="Search...">
+      <select id="statusFilter">
+        <option value="all">All</option>
+        <option value="active">Active</option>
+        <option value="sold">Sold</option>
+        <option value="archived">Archived</option>
+      </select>
+      <button id="addPianoBtn">+ Add Piano</button>
+    </div>
+    <div class="grid" id="pianoGrid"></div>
   </div>
 
-  <div class="grid" id="pianoGrid"></div>
+  <!-- Modal -->
+  <div id="pianoModal">
+    <div class="modal-content">
+      <form id="pianoForm">
+        <input type="hidden" id="editingId">
+        <input type="hidden" id="currentPhotoURL">
+        <label>Brand:<input type="text" id="brand"></label>
+        <label>Model:<input type="text" id="model"></label>
+        <label>Year:<input type="number" id="year"></label>
+        <label>Color:<input type="text" id="color"></label>
+        <label>Length:<input type="text" id="length"></label>
+        <label>Location:<input type="text" id="location"></label>
+        <label>Cost:<input type="number" id="cost"></label>
+        <label>Listing Price:<input type="number" id="listingPrice"></label>
+        <label>Sold Price:<input type="number" id="soldPrice"></label>
+        <label>Archive Reason:<input type="text" id="archiveReason"></label>
+        <label>Notes:<textarea id="notes"></textarea></label>
+        <label>Serial Number:<input type="text" id="serialNumber"></label>
+        <label>Photo:<input type="file" id="photo" accept="image/*,.heic"></label>
+        <img id="photoPreview" alt="Preview">
+        <button type="submit" id="submitBtn" class="green">Add Piano</button>
+        <button type="button" id="cancelEditBtn" class="hidden">Cancel</button>
+      </form>
+    </div>
+  </div>
 
-  <!-- Add/Edit Modal -->
-  <dialog id="pianoModal">
-    <form method="dialog" id="pianoForm">
-      <input type="hidden" id="pianoId">
-      <label>Brand <input id="brand"></label>
-      <label>Model <input id="model"></label>
-      <label>Serial Number <input id="serialNumber"></label>
-      <label>Year <input id="year" type="number"></label>
-      <label>Color <input id="color"></label>
-      <label>Location <input id="location"></label>
-      <label>Delivered <input id="delivered"></label>
-      <label>Player System 
-        <select id="playerSystem">
-          <option value="">-- Select --</option>
-          <option value="Yes">Yes</option>
-          <option value="No">No</option>
-        </select>
-      </label>
-      <label>Status 
-        <select id="status">
-          <option value="active">Active</option>
-          <option value="sold">Sold</option>
-          <option value="archive">Archived</option>
-        </select>
-      </label>
-      <label>Notes <textarea id="notes"></textarea></label>
-      <label>Photo <input type="file" id="photoInput" accept="image/*,.heic"></label>
-      <img id="imgPreview" class="preview-img" style="display:none" onclick="openPreview(this.src)">
-      <menu>
-        <button value="cancel">Cancel</button>
-        <button id="saveBtn" value="default">Save</button>
-      </menu>
-    </form>
-  </dialog>
+  <script type="module">
+    import {
+      getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot
+    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+    import {
+      getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+    import {
+      getStorage, ref, uploadBytes, getDownloadURL, deleteObject
+    } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-storage.js";
+    import { app, db, auth, storage } from "./index.js"; // Adjust path if needed
 
-  <!-- Image Preview -->
-  <dialog id="imgDialog">
-    <img id="imgDialogContent" style="max-width:90vw; max-height:80vh; border-radius:8px;">
-  </dialog>
+    const pianoGrid=document.getElementById("pianoGrid");
+    const pianoForm=document.getElementById("pianoForm");
+    const pianoModal=document.getElementById("pianoModal");
+    const addPianoBtn=document.getElementById("addPianoBtn");
+    const cancelEditBtn=document.getElementById("cancelEditBtn");
+    const submitBtn=document.getElementById("submitBtn");
+    const searchBox=document.getElementById("searchBox");
+    const statusFilter=document.getElementById("statusFilter");
 
-  <script>
-    const grid=document.getElementById("pianoGrid");
-    const modal=document.getElementById("pianoModal");
-    const form=document.getElementById("pianoForm");
-    const imgPreview=document.getElementById("imgPreview");
-    const photoInput=document.getElementById("photoInput");
-    const imgDialog=document.getElementById("imgDialog");
-    const imgDialogContent=document.getElementById("imgDialogContent");
+    const brand=document.getElementById("brand");
+    const model=document.getElementById("model");
+    const year=document.getElementById("year");
+    const color=document.getElementById("color");
+    const lengthInput=document.getElementById("length");
+    const locationInput=document.getElementById("location");
+    const cost=document.getElementById("cost");
+    const listingPrice=document.getElementById("listingPrice");
+    const soldPrice=document.getElementById("soldPrice");
+    const archiveReason=document.getElementById("archiveReason");
+    const notes=document.getElementById("notes");
+    const serialNumber=document.getElementById("serialNumber");
+    const photo=document.getElementById("photo");
+    const photoPreview=document.getElementById("photoPreview");
+    const editingId=document.getElementById("editingId");
+    const currentPhotoURL=document.getElementById("currentPhotoURL");
 
-    let pianos=JSON.parse(localStorage.getItem("pianos")||"[]");
-
-    function saveData(){ localStorage.setItem("pianos", JSON.stringify(pianos)); }
-    function openPreview(src){ imgDialogContent.src=src; imgDialog.showModal(); }
-    function openAddModal(){ form.reset(); document.getElementById("pianoId").value=""; imgPreview.style.display="none"; modal.showModal(); }
-
-    function render(){
-      grid.innerHTML="";
-      const q=document.getElementById("search").value.toLowerCase();
-      const filtered=pianos.filter(p=>
-        (p.brand||"").toLowerCase().includes(q) ||
-        (p.model||"").toLowerCase().includes(q) ||
-        (p.serialNumber||"").toLowerCase().includes(q) ||  // ✅ search by serial number
-        (p.notes||"").toLowerCase().includes(q)
-      );
-      for(const d of filtered){
-        const c=document.createElement("div");
-        c.className="card";
-        const extra=`${d.delivered?`<div class="meta">Delivered: ${d.delivered}</div>`:""}
-                     ${d.playerSystem?`<div class="meta">Player System: ${d.playerSystem}</div>`:""}`;
-        c.innerHTML=`
-          ${d.photoURL?`<div><img src="${d.photoURL}" alt="photo" style="width:100%; max-height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer;" onclick="openPreview('${d.photoURL}')"></div>`:""}
-          <h3>${(d.brand||"")+(d.model?" "+d.model:"")}</h3>
-          <div class="meta">
-            Status: ${d.status||"active"}
-            ${d.year?" • Year "+d.year:""}
-            ${d.color?" • "+d.color:""}
-            ${d.location?" • "+d.location:""}
-            ${d.serialNumber?` • SN: ${d.serialNumber}`:""}
-          </div>
-          ${d.notes?`<div class="meta">${d.notes}</div>`:""}
-          ${extra}
-          <div class="actions">
-            <button class="blue" onclick="updateStatus('${d._id}','sold')">Sell</button>
-            <button class="gray" onclick="updateStatus('${d._id}','archive')">Archive</button>
-            <button class="green" onclick="updateStatus('${d._id}','active')">Activate</button>
-            <button class="orange" onclick="editPiano('${d._id}')">Edit</button>
-            <button class="red" onclick="deletePiano('${d._id}')">Delete</button>
-          </div>
-        `;
-        grid.appendChild(c);
-      }
+    // Reset form
+    function resetForm(){
+      pianoForm.reset();
+      editingId.value="";
+      currentPhotoURL.value="";
+      photoPreview.src="";
+      photoPreview.style.display="none";
+      submitBtn.textContent="Add Piano";
+      cancelEditBtn.classList.add("hidden");
+      serialNumber.value="";
     }
 
-    function editPiano(id){
-      const p=pianos.find(x=>x._id===id);
-      if(!p) return;
-      document.getElementById("pianoId").value=p._id;
-      document.getElementById("brand").value=p.brand||"";
-      document.getElementById("model").value=p.model||"";
-      document.getElementById("serialNumber").value=p.serialNumber||"";
-      document.getElementById("year").value=p.year||"";
-      document.getElementById("color").value=p.color||"";
-      document.getElementById("location").value=p.location||"";
-      document.getElementById("delivered").value=p.delivered||"";
-      document.getElementById("playerSystem").value=p.playerSystem||"";
-      document.getElementById("status").value=p.status||"active";
-      document.getElementById("notes").value=p.notes||"";
-      if(p.photoURL){ imgPreview.src=p.photoURL; imgPreview.style.display="block"; } else { imgPreview.style.display="none"; }
-      modal.showModal();
-    }
+    function openModal(){ pianoModal.style.display="flex"; }
+    function closeModal(){ pianoModal.style.display="none"; resetForm(); }
 
-    function deletePiano(id){
-      if(confirm("Delete this piano?")){
-        pianos=pianos.filter(x=>x._id!==id);
-        saveData(); render();
-      }
-    }
+    addPianoBtn.onclick=openModal;
+    cancelEditBtn.onclick=()=>{ closeModal(); };
 
-    function updateStatus(id,status){
-      const p=pianos.find(x=>x._id===id);
-      if(p){ p.status=status; saveData(); render(); }
-    }
-
-    form.onsubmit=async e=>{
+    // Save piano
+    pianoForm.addEventListener("submit",async e=>{
       e.preventDefault();
-      const id=document.getElementById("pianoId").value || Date.now().toString();
+      const id=editingId.value;
+      let url=currentPhotoURL.value;
+      if(photo.files.length){
+        let file=photo.files[0];
+        if(file.type==="image/heic"||file.name.endsWith(".heic")){
+          const blob=await heic2any({blob:file,toType:"image/jpeg"});
+          file=new File([blob],file.name.replace(/\.heic$/i,".jpg"),{type:"image/jpeg"});
+        }
+        const storageRef=ref(storage,"pianos/"+Date.now()+"_"+file.name);
+        await uploadBytes(storageRef,file);
+        url=await getDownloadURL(storageRef);
+      }
+
       const data={
-        _id:id,
-        brand:document.getElementById("brand").value,
-        model:document.getElementById("model").value,
-        serialNumber:document.getElementById("serialNumber").value,
-        year:document.getElementById("year").value,
-        color:document.getElementById("color").value,
-        location:document.getElementById("location").value,
-        delivered:document.getElementById("delivered").value,
-        playerSystem:document.getElementById("playerSystem").value,
-        status:document.getElementById("status").value,
-        notes:document.getElementById("notes").value,
+        brand: brand.value||null,
+        model: model.value||null,
+        year: year.value?+year.value:null,
+        color: color.value||null,
+        length: lengthInput.value||null,
+        location: locationInput.value||null,
+        cost: cost.value?+cost.value:null,
+        listingPrice: listingPrice.value?+listingPrice.value:null,
+        soldPrice: soldPrice.value?+soldPrice.value:null,
+        archiveReason: archiveReason.value||null,
+        notes: notes.value||null,
+        serialNumber: serialNumber.value||null,
+        photoURL: url||null,
+        status: (soldPrice.value? "sold" : archiveReason.value? "archived" : "active")
       };
 
-      // Handle photo
-      if(photoInput.files[0]){
-        let file=photoInput.files[0];
-        if(file.name.toLowerCase().endsWith(".heic")){
-          const conv=await heic2any({blob:file, toType:"image/jpeg"});
-          file=new File([conv],"converted.jpg",{type:"image/jpeg"});
-        }
-        const reader=new FileReader();
-        reader.onload=e2=>{
-          data.photoURL=e2.target.result;
-          finishSave(data,id);
-        };
-        reader.readAsDataURL(file);
+      if(id){
+        await updateDoc(doc(db,"pianos",id),data);
       } else {
-        const ex=pianos.find(x=>x._id===id);
-        if(ex && ex.photoURL) data.photoURL=ex.photoURL;
-        finishSave(data,id);
+        await addDoc(collection(db,"pianos"),data);
       }
-    };
+      closeModal();
+    });
 
-    function finishSave(data,id){
-      const idx=pianos.findIndex(x=>x._id===id);
-      if(idx>=0) pianos[idx]=data; else pianos.push(data);
-      saveData(); render(); modal.close();
+    // Realtime load
+    onSnapshot(collection(db,"pianos"),snap=>{
+      const docs=[];
+      snap.forEach(d=>docs.push({id:d.id,...d.data()}));
+      render(docs);
+    });
+
+    function render(docs){
+      const q=searchBox.value.toLowerCase();
+      const filter=statusFilter.value;
+      let filtered=docs;
+      if(filter!=="all") filtered=filtered.filter(d=>(d.status||"active")===filter);
+      if(q){
+        filtered=filtered.filter(d=>
+          (d.brand||"").toLowerCase().includes(q) ||
+          (d.model||"").toLowerCase().includes(q) ||
+          (d.notes||"").toLowerCase().includes(q) ||
+          (d.year?.toString()||"").includes(q) ||
+          (d.serialNumber||"").toLowerCase().includes(q)
+        );
+      }
+      pianoGrid.innerHTML=filtered.map(d=>`
+        <div class="card">
+          ${d.photoURL? `<img src="${d.photoURL}">`:""}
+          <div class="card-content">
+            <h3>${d.brand||""} ${d.model||""}</h3>
+            <div class="meta">
+              Status: ${d.status||"active"}
+              ${d.year?" • Year "+d.year:""}
+              ${d.color?" • "+d.color:""}
+              ${d.location?" • "+d.location:""}
+              ${d.serialNumber?` • SN: ${d.serialNumber}`:""}
+            </div>
+            <p>${d.notes||""}</p>
+            <button onclick="editPiano('${d.id}')">Edit</button>
+            <button onclick="deletePiano('${d.id}','${d.photoURL||""}')">Delete</button>
+          </div>
+        </div>
+      `).join("");
     }
 
-    document.getElementById("search").oninput=render;
-    photoInput.onchange=()=>{
-      if(photoInput.files[0]){
-        const reader=new FileReader();
-        reader.onload=e=>{ imgPreview.src=e.target.result; imgPreview.style.display="block"; };
-        reader.readAsDataURL(photoInput.files[0]);
+    window.editPiano=async id=>{
+      const d=await (await getDocs(collection(db,"pianos"))).docs.find(x=>x.id===id);
+      if(!d) return;
+      const data=d.data();
+      editingId.value=id;
+      brand.value=data.brand||"";
+      model.value=data.model||"";
+      year.value=data.year||"";
+      color.value=data.color||"";
+      lengthInput.value=data.length||"";
+      locationInput.value=data.location||"";
+      cost.value=data.cost||"";
+      listingPrice.value=data.listingPrice||"";
+      soldPrice.value=data.soldPrice||"";
+      archiveReason.value=data.archiveReason||"";
+      notes.value=data.notes||"";
+      serialNumber.value=data.serialNumber||"";
+      currentPhotoURL.value=data.photoURL||"";
+      if(data.photoURL){ photoPreview.src=data.photoURL; photoPreview.style.display="block"; }
+      submitBtn.textContent="Update Piano";
+      cancelEditBtn.classList.remove("hidden");
+      openModal();
+    };
+
+    window.deletePiano=async (id,url)=>{
+      if(!confirm("Delete this piano?")) return;
+      await deleteDoc(doc(db,"pianos",id));
+      if(url){
+        const storageRef=ref(storage,url);
+        deleteObject(storageRef).catch(()=>{});
       }
     };
 
-    render();
+    searchBox.oninput=()=>onSnapshot(collection(db,"pianos"),snap=>{
+      const docs=[]; snap.forEach(d=>docs.push({id:d.id,...d.data()})); render(docs);
+    });
+    statusFilter.onchange=()=>searchBox.oninput();
   </script>
 </body>
 </html>
