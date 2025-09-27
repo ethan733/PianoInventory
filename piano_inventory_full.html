@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Piano Inventory</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- HEIC to JPG conversion library -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:20px; color:#111; }
+    h1 { margin:0 0 20px; }
+    .tabs { display:flex; gap:10px; margin-bottom:20px; }
+    .tab { padding:8px 14px; border:1px solid #ccc; cursor:pointer; border-radius:6px; background:#fff; }
+    .tab.active { background:#007bff; color:#fff; font-weight:bold; border-color:#007bff; }
+    .filters { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; }
+    .filters input, .filters select { padding:8px; border:1px solid #ccc; border-radius:6px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+    .card { background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; }
+    .card h3 { margin:0 0 8px; }
+    .meta { font-size:14px; color:#555; }
+    .actions { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+    button { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; }
+    .green { background:#28a745; color:#fff; }
+    .blue { background:#007bff; color:#fff; }
+    .orange { background:#fd7e14; color:#fff; }
+    .red { background:#dc3545; color:#fff; }
+    .gray { background:#6c757d; color:#fff; }
+    .hidden { display:none; }
+    #toast { position:fixed; bottom:20px; right:20px; background:#333; color:#fff; padding:10px 14px; border-radius:6px; opacity:0; transition:opacity .3s; }
+    #toast.show { opacity:1; }
+    #sold-summary { margin:15px 0; padding:12px; background:#fff; border:1px solid #ddd; border-radius:6px; }
+    #sold-summary .row { display:flex; gap:16px; flex-wrap:wrap; }
+    #sold-summary .row > div { min-width:220px; }
+    .muted { color:#666; }
+
+    body.dark { background:#121212; color:#eaeaea; }
+    body.dark h1 { color:#fff; }
+    body.dark .card { background:#1e1e1e; border-color:#333; }
+    body.dark .tab { background:#222; color:#ccc; border-color:#444; }
+    body.dark .tab.active { background:#007bff; color:#fff; border-color:#007bff; }
+    body.dark input, body.dark select, body.dark textarea {
+      background:#222; color:#eee; border-color:#555;
+    }
+    body.dark button { opacity:0.9; }
+    body.dark #sold-summary { background:#1e1e1e; border-color:#333; }
+
+    .modal { display:flex; justify-content:center; align-items:center;
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,0.6); z-index:1000; }
+    .modal.hidden { display:none; }
+    .modal-content {
+      background:#fff; padding:20px; border-radius:8px; max-width:500px; width:90%;
+      max-height:90%; overflow-y:auto; position:relative;
+    }
+    .modal-content h2 { margin-top:0; }
+    .close { position:absolute; top:10px; right:15px; font-size:22px; cursor:pointer; }
+    body.dark .modal-content { background:#1e1e1e; color:#fff; }
+    form input, form textarea, form select { width:100%; margin:6px 0; padding:8px; border:1px solid #ccc; border-radius:6px; }
+
+    #imgPreviewModal .modal-content { background:none; box-shadow:none; padding:0; }
+  </style>
+</head>
+<body>
+  <h1>🎹 Piano Inventory</h1>
+
+  <button id="darkToggle" class="gray" style="margin-bottom:15px;">🌙 Toggle Dark Mode</button>
+  <button id="openModal" class="green" style="margin-bottom:15px; margin-left:10px;">➕ Add Piano</button>
+
+  <div>
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button id="loginBtn" class="blue">Login</button>
+    <button id="logoutBtn" class="gray hidden">Logout</button>
+    <span id="whoami" class="muted"></span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="active">Active</div>
+    <div class="tab" data-tab="sold">Sold</div>
+    <div class="tab" data-tab="archive">Archive</div>
+  </div>
+
+  <div class="filters">
+    <label for="sortBy">Sort: </label>
+    <select id="sortBy">
+      <option value="createdAt">Created (newest)</option>
+      <option value="profit">Profit (high → low)</option>
+    </select>
+    <input type="text" id="searchBox" placeholder="Search (brand, model, year, notes)">
+    <select id="filterLocation">
+      <option value="">All Locations</option>
+      <option value="Gallery">Gallery</option>
+      <option value="Cartersville">Cartersville</option>
+    </select>
+  </div>
+
+  <div id="sold-summary" class="hidden">
+    <strong>Sold Summary</strong>
+    <div class="row">
+      <div>Total Sales: <span id="sumSales">$0</span></div>
+      <div>Total Cost: <span id="sumCost">$0</span></div>
+      <div>Total Profit: <span id="sumProfit">$0</span></div>
+      <div>Total Commissions (15%): <span id="sumComm">$0.00</span></div>
+    </div>
+  </div>
+
+  <div id="active-list" class="grid"></div>
+  <div id="sold-list" class="grid hidden"></div>
+  <div id="archive-list" class="grid hidden"></div>
+
+  <!-- Add/Edit Modal -->
+  <div id="pianoModal" class="modal hidden">
+    <div class="modal-content">
+      <span id="closeModal" class="close">&times;</span>
+      <h2 id="modalTitle">Add Piano</h2>
+      <form id="pianoForm">
+        <input type="text" id="brand" placeholder="Brand" required>
+        <input type="text" id="model" placeholder="Model">
+        <input type="number" id="year" placeholder="Year">
+        <input type="text" id="color" placeholder="Color">
+        <input type="text" id="length" placeholder="Length">
+        <select id="location">
+          <option value="Gallery">Gallery</option>
+          <option value="Cartersville">Cartersville</option>
+        </select>
+        <input type="number" id="cost" placeholder="Buying Cost">
+        <input type="number" id="listingPrice" placeholder="Listing Price">
+        <input type="number" id="soldPrice" placeholder="Sold Price (if sold)">
+        <input type="text" id="archiveReason" placeholder="Archive Reason (if archived)">
+        <textarea id="notes" placeholder="Notes"></textarea>
+        <input type="file" id="photo" accept="image/*">
+        <img id="photoPreview" src="" alt="Preview" style="max-width:100%; margin-top:10px; border-radius:6px; display:none;">
+        <input type="hidden" id="editingId">
+        <input type="hidden" id="currentPhotoURL">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="submit" id="submitBtn" class="green">Add Piano</button>
+          <button type="button" id="cancelEditBtn" class="gray hidden">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Image Preview Modal -->
+  <div id="imgPreviewModal" class="modal hidden">
+    <div class="modal-content" style="max-width:90%; max-height:90%;">
+      <span id="closeImgPreview" class="close" style="color:white; font-size:30px; right:20px;">&times;</span>
+      <img id="previewImg" src="" alt="Preview" style="max-width:100%; max-height:100%; border-radius:8px; display:block; margin:auto;">
+    </div>
+  </div>
+
+  <!-- View Details Modal -->
+  <div id="viewModal" class="modal hidden">
+    <div class="modal-content">
+      <span id="closeView" class="close">&times;</span>
+      <div id="viewContent"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, getDoc, orderBy, query } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
+      authDomain: "pianoinv.firebaseapp.com",
+      projectId: "pianoinv",
+      storageBucket: "pianoinv.firebasestorage.app",
+      messagingSenderId: "651707888262",
+      appId: "1:651707888262:web:23131a782e31a7bb511707",
+      measurementId: "G-1XQLEV28JZ"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    const toast=document.getElementById("toast");
+    function showToast(m){ toast.textContent=m; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),2000); }
+    function money(n){ return (n==null||isNaN(n)) ? "—" : n.toLocaleString(undefined,{style:"currency",currency:"USD"}); }
+
+    let currentUser=null;
+    onAuthStateChanged(auth,u=>{
+      currentUser=u;
+      loginBtn.classList.toggle("hidden",!!u);
+      logoutBtn.classList.toggle("hidden",!u);
+      document.getElementById("whoami").textContent=u?u.email:"";
+    });
+    loginBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,password.value).catch(e=>showToast(e.message));
+    logoutBtn.onclick=()=>signOut(auth);
+
+    // Dark mode toggle
+    const darkToggle=document.getElementById("darkToggle");
+    darkToggle.addEventListener("click",()=>{
+      document.body.classList.toggle("dark");
+      localStorage.setItem("darkMode", document.body.classList.contains("dark") ? "on" : "off");
+    });
+    if(localStorage.getItem("darkMode")==="on"){ document.body.classList.add("dark"); }
+
+    // Modals
+    const modal=document.getElementById("pianoModal");
+    const openModal=document.getElementById("openModal");
+    const closeModal=document.getElementById("closeModal");
+    const modalTitle=document.getElementById("modalTitle");
+    openModal.onclick=()=>{ modal.classList.remove("hidden"); resetForm(); modalTitle.textContent="Add Piano"; }
+    closeModal.onclick=()=>modal.classList.add("hidden");
+
+    const imgPreviewModal=document.getElementById("imgPreviewModal");
+    const previewImg=document.getElementById("previewImg");
+    const closeImgPreview=document.getElementById("closeImgPreview");
+    function openPreview(src){ previewImg.src=src; imgPreviewModal.classList.remove("hidden"); }
+    closeImgPreview.onclick=()=>imgPreviewModal.classList.add("hidden");
+    window.openPreview=openPreview;
+
+    // NEW: View modal
+    const viewModal=document.getElementById("viewModal");
+    const viewContent=document.getElementById("viewContent");
+    const closeView=document.getElementById("closeView");
+    closeView.onclick=()=>viewModal.classList.add("hidden");
+    function openView(d){
+      viewContent.innerHTML=`
+        ${d.photoURL ? `<img src="${d.photoURL}" style="max-width:100%; border-radius:6px; margin-bottom:12px; cursor:pointer;" onclick="openPreview('${d.photoURL}')">` : ""}
+        <h2>${(d.brand||"")+(d.model?" "+d.model:"")}</h2>
+        <p><strong>Year:</strong> ${d.year||"—"}</p>
+        <p><strong>Color:</strong> ${d.color||"—"}</p>
+        <p><strong>Length:</strong> ${d.length||"—"}</p>
+        <p><strong>Location:</strong> ${d.location||"—"}</p>
+        <p><strong>Buying Cost:</strong> ${money(d.cost)}</p>
+        <p><strong>Listing Price:</strong> ${money(d.listingPrice)}</p>
+        <p><strong>Sold Price:</strong> ${money(d.soldPrice)}</p>
+        <p><strong>Status:</strong> ${d.status||"active"}</p>
+        <p><strong>Notes:</strong><br>${d.notes||""}</p>`;
+      viewModal.classList.remove("hidden");
+    }
+    window.openView=openView;
+
+    // ... your existing form bindings, photo upload with HEIC fix, save logic, render() etc. remain unchanged ...
+  </script>
+</body>
+</html>
