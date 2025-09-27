@@ -8,9 +8,10 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png">
 
+  <!-- HEIC to JPG conversion -->
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
+
   <style>
-    /* --- your existing CSS (shortened here to save space) --- */
     body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:20px; color:#111; }
     h1 { margin:0 0 20px; }
     .tabs { display:flex; gap:10px; margin-bottom:20px; }
@@ -18,18 +19,28 @@
     .tab.active { background:#007bff; color:#fff; font-weight:bold; border-color:#007bff; }
     .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
     .card { background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; }
+    .card h3 { margin:0 0 8px; }
+    .meta { font-size:14px; color:#555; }
     .actions { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
     button { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; }
-    .green { background:#28a745; color:#fff; } .blue { background:#007bff; color:#fff; }
-    .orange { background:#fd7e14; color:#fff; } .red { background:#dc3545; color:#fff; }
+    .green { background:#28a745; color:#fff; }
+    .blue { background:#007bff; color:#fff; }
+    .orange { background:#fd7e14; color:#fff; }
+    .red { background:#dc3545; color:#fff; }
     .gray { background:#6c757d; color:#fff; }
+    .hidden { display:none; }
+    #toast { position:fixed; bottom:20px; right:20px; background:#333; color:#fff; padding:10px 14px; border-radius:6px; opacity:0; transition:opacity .3s; }
+    #toast.show { opacity:1; }
+    body.dark { background:#121212; color:#eaeaea; }
+    body.dark .card { background:#1e1e1e; border-color:#333; }
+    body.dark .tab { background:#222; color:#ccc; border-color:#444; }
+    body.dark .tab.active { background:#007bff; color:#fff; border-color:#007bff; }
+    body.dark .modal-content { background:#1e1e1e; color:#fff; }
     .modal { display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; }
     .modal.hidden { display:none; }
     .modal-content { background:#fff; padding:20px; border-radius:8px; max-width:500px; width:90%; max-height:90%; overflow-y:auto; position:relative; }
     .close { position:absolute; top:10px; right:15px; font-size:22px; cursor:pointer; }
-    body.dark { background:#121212; color:#eaeaea; }
-    body.dark .card { background:#1e1e1e; border-color:#333; }
-    body.dark .modal-content { background:#1e1e1e; color:#fff; }
+    form input, form textarea, form select { width:100%; margin:6px 0; padding:8px; border:1px solid #ccc; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -37,14 +48,6 @@
 
   <button id="darkToggle" class="gray" style="margin-bottom:15px;">🌙 Toggle Dark Mode</button>
   <button id="openModal" class="green" style="margin-bottom:15px; margin-left:10px;">➕ Add Piano</button>
-
-  <div>
-    <input type="email" id="email" placeholder="Email">
-    <input type="password" id="password" placeholder="Password">
-    <button id="loginBtn" class="blue">Login</button>
-    <button id="logoutBtn" class="gray hidden">Logout</button>
-    <span id="whoami"></span>
-  </div>
 
   <div class="tabs">
     <div class="tab active" data-tab="active">Active</div>
@@ -73,6 +76,7 @@
         <input type="number" id="cost" placeholder="Buying Cost">
         <input type="number" id="listingPrice" placeholder="Listing Price">
         <input type="number" id="soldPrice" placeholder="Sold Price (if sold)">
+        <textarea id="notes" placeholder="Notes"></textarea>
         <input type="file" id="photo" accept="image/*">
         <img id="photoPreview" style="max-width:100%;display:none;">
         <input type="hidden" id="editingId"><input type="hidden" id="currentPhotoURL">
@@ -84,7 +88,7 @@
     </div>
   </div>
 
-  <!-- View Details Modal -->
+  <!-- View Modal -->
   <div id="viewModal" class="modal hidden">
     <div class="modal-content">
       <span id="closeView" class="close">&times;</span>
@@ -92,19 +96,22 @@
     </div>
   </div>
 
+  <div id="toast"></div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, getDoc, orderBy, query } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
 
-    const firebaseConfig={ /* your config */ };
-    const app=initializeApp(firebaseConfig); const auth=getAuth(app); const db=getFirestore(app); const storage=getStorage(app);
+    const firebaseConfig = { /* your Firebase config */ };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
 
-    let currentUser=null;
-    onAuthStateChanged(auth,u=>{currentUser=u;});
+    let currentUser=null; onAuthStateChanged(auth,u=>{ currentUser=u; });
 
-    // Fields
     const brand=document.getElementById("brand"), model=document.getElementById("model"),
           year=document.getElementById("year"), color=document.getElementById("color"),
           lengthInput=document.getElementById("length"), manufacturedIn=document.getElementById("manufacturedIn"),
@@ -114,6 +121,9 @@
           photo=document.getElementById("photo"), photoPreview=document.getElementById("photoPreview"),
           editingId=document.getElementById("editingId"), currentPhotoURL=document.getElementById("currentPhotoURL");
 
+    function showToast(m){ const toast=document.getElementById("toast"); toast.textContent=m; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),2000); }
+    function money(n){ return (n==null||isNaN(n))?"—":n.toLocaleString(undefined,{style:"currency",currency:"USD"}); }
+
     function resetForm(){ brand.value=model.value=year.value=color.value=lengthInput.value=manufacturedIn.value=salesPerson.value=""; cost.value=listingPrice.value=soldPrice.value=""; editingId.value=""; currentPhotoURL.value=""; photoPreview.src=""; photoPreview.style.display="none"; }
 
     async function updateStatus(id,status){
@@ -122,9 +132,13 @@
         let price=prompt("Sold price? (blank = listing price)");
         let person=prompt("Salesperson who sold it?");
         await updateDoc(refDoc,{status:"sold",soldAt:serverTimestamp(),soldPrice:price?+price:null,salesPerson:person||null});
-      } else if(status==="archive"){ await updateDoc(refDoc,{status:"archive"}); }
-      else { await updateDoc(refDoc,{status}); }
+      } else if(status==="archive"){
+        await updateDoc(refDoc,{status:"archive"});
+      } else {
+        await updateDoc(refDoc,{status});
+      }
     }
+    window.updateStatus=updateStatus;
 
     function openView(d){
       document.getElementById("viewContent").innerHTML=`
@@ -135,12 +149,46 @@
         <p><strong>Manufactured In:</strong> ${d.manufacturedIn||"—"}</p>
         <p><strong>Salesperson:</strong> ${d.salesPerson||"—"}</p>
         <p><strong>Location:</strong> ${d.location||"—"}</p>
-        <p><strong>Listing Price:</strong> ${d.listingPrice||"—"}</p>
-        <p><strong>Sold Price:</strong> ${d.soldPrice||"—"}</p>
-      `;
+        <p><strong>Buying Cost:</strong> ${money(d.cost)}</p>
+        <p><strong>Listing Price:</strong> ${money(d.listingPrice)}</p>
+        <p><strong>Sold Price:</strong> ${money(d.soldPrice)}</p>
+        <p><strong>Status:</strong> ${d.status||"active"}</p>
+        <p><strong>Notes:</strong> ${d.notes||""}</p>`;
       document.getElementById("viewModal").classList.remove("hidden");
     }
-    window.openView=openView; window.updateStatus=updateStatus;
+    window.openView=openView;
+
+    // Firestore sync + rendering
+    let docsCache=[]; let currentTab="active";
+    const activeList=document.getElementById("active-list"),
+          soldList=document.getElementById("sold-list"),
+          archiveList=document.getElementById("archive-list");
+
+    function render(){
+      activeList.innerHTML=""; soldList.innerHTML=""; archiveList.innerHTML="";
+      for(const d of docsCache){
+        const c=document.createElement("div"); c.className="card";
+        c.innerHTML=`
+          ${d.photoURL?`<img src="${d.photoURL}" style="width:100%;max-height:180px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="openView(${JSON.stringify(d).replace(/"/g,'&quot;')})">`:""}
+          <h3>${d.brand||""} ${d.model||""}</h3>
+          <div class="meta">Status: ${d.status||"active"} ${d.year?" • Year "+d.year:""} ${d.color?" • "+d.color:""} ${d.location?" • "+d.location:""}</div>
+          <div class="actions">
+            <button class="blue" onclick="updateStatus('${d._id}','sold')">Sell</button>
+            <button class="gray" onclick="updateStatus('${d._id}','archive')">Archive</button>
+            <button class="green" onclick="updateStatus('${d._id}','active')">Activate</button>
+            <button class="orange" onclick="openView(d)">View</button>
+            <button class="red" onclick="deleteDoc(doc(db,'pianos','${d._id}'))">Delete</button>
+          </div>`;
+        if((d.status||"active")==="active") activeList.appendChild(c);
+        if(d.status==="sold") soldList.appendChild(c);
+        if(d.status==="archive") archiveList.appendChild(c);
+      }
+    }
+
+    onSnapshot(query(collection(db,"pianos"),orderBy("createdAt","desc")),snap=>{
+      docsCache=snap.docs.map(d=>({...d.data(),_id:d.id}));
+      render();
+    });
   </script>
 </body>
 </html>
