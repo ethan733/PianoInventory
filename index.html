@@ -4,17 +4,14 @@
   <meta charset="UTF-8" />
   <title>Piano Inventory</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-
-  <!-- HEIC to JPG conversion library -->
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
-
   <style>
     body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:20px; color:#111; }
     h1 { margin:0 0 20px; }
     .tabs { display:flex; gap:10px; margin-bottom:20px; }
     .tab { padding:8px 14px; border:1px solid #ccc; cursor:pointer; border-radius:6px; background:#fff; }
     .tab.active { background:#007bff; color:#fff; font-weight:bold; border-color:#007bff; }
-    .filters { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; }
+    .filters { margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .filters input, .filters select { padding:8px; border:1px solid #ccc; border-radius:6px; }
     .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
     .card { background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; }
@@ -35,17 +32,17 @@
     #sold-summary .row > div { min-width:220px; }
     .muted { color:#666; }
 
+    /* Dark mode */
     body.dark { background:#121212; color:#eaeaea; }
     body.dark h1 { color:#fff; }
     body.dark .card { background:#1e1e1e; border-color:#333; }
     body.dark .tab { background:#222; color:#ccc; border-color:#444; }
     body.dark .tab.active { background:#007bff; color:#fff; border-color:#007bff; }
-    body.dark input, body.dark select, body.dark textarea {
-      background:#222; color:#eee; border-color:#555;
-    }
+    body.dark input, body.dark select, body.dark textarea { background:#222; color:#eee; border-color:#555; }
     body.dark button { opacity:0.9; }
     body.dark #sold-summary { background:#1e1e1e; border-color:#333; }
 
+    /* Modals */
     .modal { display:flex; justify-content:center; align-items:center;
       position:fixed; top:0; left:0; width:100%; height:100%;
       background:rgba(0,0,0,0.6); z-index:1000; }
@@ -142,7 +139,7 @@
     </div>
   </div>
 
-  <!-- Image Preview Modal -->
+  <!-- Fullscreen Image Preview Modal -->
   <div id="imgPreviewModal" class="modal hidden">
     <div class="modal-content" style="max-width:90%; max-height:90%;">
       <span id="closeImgPreview" class="close" style="color:white; font-size:30px; right:20px;">&times;</span>
@@ -180,11 +177,16 @@
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    const toast=document.getElementById("toast");
+    const toast = document.getElementById("toast");
     function showToast(m){ toast.textContent=m; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),2000); }
     function money(n){ return (n==null||isNaN(n)) ? "—" : n.toLocaleString(undefined,{style:"currency",currency:"USD"}); }
 
     let currentUser=null;
+    const loginBtn=document.getElementById("loginBtn");
+    const logoutBtn=document.getElementById("logoutBtn");
+    const email=document.getElementById("email");
+    const password=document.getElementById("password");
+
     onAuthStateChanged(auth,u=>{
       currentUser=u;
       loginBtn.classList.toggle("hidden",!!u);
@@ -203,13 +205,16 @@
     if(localStorage.getItem("darkMode")==="on"){ document.body.classList.add("dark"); }
 
     // Modals
-    const modal=document.getElementById("pianoModal");
-    const openModal=document.getElementById("openModal");
+    const pianoModal=document.getElementById("pianoModal");
+    const openModalBtn=document.getElementById("openModal");
     const closeModal=document.getElementById("closeModal");
     const modalTitle=document.getElementById("modalTitle");
-    openModal.onclick=()=>{ modal.classList.remove("hidden"); resetForm(); modalTitle.textContent="Add Piano"; }
-    closeModal.onclick=()=>modal.classList.add("hidden");
+    const cancelEditBtn=document.getElementById("cancelEditBtn");
+    openModalBtn.onclick=()=>{ resetForm(); pianoModal.classList.remove("hidden"); };
+    closeModal.onclick=()=>pianoModal.classList.add("hidden");
+    cancelEditBtn.onclick=()=>{ resetForm(); pianoModal.classList.add("hidden"); };
 
+    // Image preview modal
     const imgPreviewModal=document.getElementById("imgPreviewModal");
     const previewImg=document.getElementById("previewImg");
     const closeImgPreview=document.getElementById("closeImgPreview");
@@ -217,14 +222,14 @@
     closeImgPreview.onclick=()=>imgPreviewModal.classList.add("hidden");
     window.openPreview=openPreview;
 
-    // NEW: View modal
+    // View modal
     const viewModal=document.getElementById("viewModal");
     const viewContent=document.getElementById("viewContent");
     const closeView=document.getElementById("closeView");
     closeView.onclick=()=>viewModal.classList.add("hidden");
     function openView(d){
       viewContent.innerHTML=`
-        ${d.photoURL ? `<img src="${d.photoURL}" style="max-width:100%; border-radius:6px; margin-bottom:12px; cursor:pointer;" onclick="openPreview('${d.photoURL}')">` : ""}
+        ${d.photoURL?`<img src="${d.photoURL}" style="max-width:100%; border-radius:6px; margin-bottom:12px; cursor:pointer;" onclick="openPreview('${d.photoURL}')">`:""}
         <h2>${(d.brand||"")+(d.model?" "+d.model:"")}</h2>
         <p><strong>Year:</strong> ${d.year||"—"}</p>
         <p><strong>Color:</strong> ${d.color||"—"}</p>
@@ -234,12 +239,236 @@
         <p><strong>Listing Price:</strong> ${money(d.listingPrice)}</p>
         <p><strong>Sold Price:</strong> ${money(d.soldPrice)}</p>
         <p><strong>Status:</strong> ${d.status||"active"}</p>
-        <p><strong>Notes:</strong><br>${d.notes||""}</p>`;
+        <p><strong>Notes:</strong><br>${d.notes||""}</p>
+      `;
       viewModal.classList.remove("hidden");
     }
     window.openView=openView;
 
-    // ... your existing form bindings, photo upload with HEIC fix, save logic, render() etc. remain unchanged ...
+    // Form bindings
+    const pianoForm=document.getElementById("pianoForm");
+    const editingId=document.getElementById("editingId");
+    const brand=document.getElementById("brand");
+    const model=document.getElementById("model");
+    const year=document.getElementById("year");
+    const color=document.getElementById("color");
+    const lengthInput=document.getElementById("length");
+    const locationInput=document.getElementById("location");
+    const cost=document.getElementById("cost");
+    const listingPrice=document.getElementById("listingPrice");
+    const soldPrice=document.getElementById("soldPrice");
+    const archiveReason=document.getElementById("archiveReason");
+    const notes=document.getElementById("notes");
+    const photo=document.getElementById("photo");
+    const photoPreview=document.getElementById("photoPreview");
+    const currentPhotoURL=document.getElementById("currentPhotoURL");
+    const submitBtn=document.getElementById("submitBtn");
+
+    function resetForm(){
+      pianoForm.reset();
+      editingId.value="";
+      currentPhotoURL.value="";
+      photoPreview.src="";
+      photoPreview.style.display="none";
+      submitBtn.textContent="Add Piano";
+      submitBtn.classList.remove("orange");
+      submitBtn.classList.add("green");
+      cancelEditBtn.classList.add("hidden");
+      modalTitle.textContent="Add Piano";
+    }
+
+    function setEdit(id,data){
+      editingId.value=id;
+      brand.value=data.brand||"";
+      model.value=data.model||"";
+      year.value=data.year!=null?data.year:"";
+      color.value=data.color||"";
+      lengthInput.value=data.length||"";
+      locationInput.value=data.location||"Gallery";
+      cost.value=data.cost!=null?data.cost:"";
+      listingPrice.value=data.listingPrice!=null?data.listingPrice:"";
+      soldPrice.value=data.soldPrice!=null?data.soldPrice:"";
+      archiveReason.value=data.archiveReason||"";
+      notes.value=data.notes||"";
+      currentPhotoURL.value=data.photoURL||"";
+      if(data.photoURL){ photoPreview.src=data.photoURL; photoPreview.style.display="block"; }
+      else { photoPreview.src=""; photoPreview.style.display="none"; }
+      submitBtn.textContent="Save Changes";
+      submitBtn.classList.remove("green");
+      submitBtn.classList.add("orange");
+      cancelEditBtn.classList.remove("hidden");
+      pianoModal.classList.remove("hidden");
+      modalTitle.textContent="Edit Piano";
+    }
+    window.__setEdit=async id=>{ const snap=await getDoc(doc(db,"pianos",id)); if(snap.exists())setEdit(id,snap.data()); else showToast("Not found"); };
+
+    // HEIC preview conversion
+    photo.addEventListener("change", async () => {
+      let file = photo.files[0];
+      if(!file){ photoPreview.src=""; photoPreview.style.display="none"; return; }
+      if(file.type==="image/heic"||file.name.toLowerCase().endsWith(".heic")){
+        try{ const converted=await heic2any({ blob:file, toType:"image/jpeg" });
+          file=new File([converted], file.name.replace(/\\.heic$/i,".jpg"), { type:"image/jpeg" });
+        }catch(err){ showToast("HEIC preview failed: "+err.message); }
+      }
+      const reader=new FileReader();
+      reader.onload=e=>{ photoPreview.src=e.target.result; photoPreview.style.display="block"; };
+      reader.readAsDataURL(file);
+    });
+
+    // Save piano
+    pianoForm.addEventListener("submit",async e=>{
+      e.preventDefault();
+      if(!currentUser){ showToast("Sign in required"); return; }
+      const id=editingId.value;
+      const data={ 
+        brand: brand.value||null,
+        model: model.value||null,
+        year: year.value?+year.value:null,
+        color: color.value||null,
+        length: lengthInput.value||null,
+        location: locationInput.value||null,
+        cost: cost.value?+cost.value:null,
+        listingPrice: listingPrice.value?+listingPrice.value:null,
+        soldPrice: soldPrice.value?+soldPrice.value:null,
+        archiveReason: archiveReason.value||null,
+        notes: notes.value||null
+      };
+      let photoURL=currentPhotoURL.value||"";
+      if(photo.files[0]){
+        let file=photo.files[0];
+        if(file.type==="image/heic"||file.name.toLowerCase().endsWith(".heic")){
+          try{ const converted=await heic2any({ blob:file, toType:"image/jpeg" });
+            file=new File([converted], file.name.replace(/\\.heic$/i,".jpg"), { type:"image/jpeg" });
+          }catch(err){ showToast("HEIC conversion failed: "+err.message); }
+        }
+        const r=ref(storage,"piano_photos/"+Date.now()+"_"+file.name);
+        await uploadBytes(r,file);
+        photoURL=await getDownloadURL(r);
+      }
+      if(id){ await updateDoc(doc(db,"pianos",id),{...data,photoURL}); showToast("Updated"); }
+      else { await addDoc(collection(db,"pianos"),{...data,photoURL:photoURL||"",status:"active",createdAt:serverTimestamp()}); showToast("Added"); }
+      resetForm(); pianoModal.classList.add("hidden");
+    });
+
+    async function updateStatus(id,status){
+      if(!currentUser){showToast("Sign in required");return;}
+      const refDoc=doc(db,"pianos",id);
+      if(status==="sold"){
+        let price=prompt("Sold price? (blank = listing price)");
+        await updateDoc(refDoc,{status:"sold",soldAt:serverTimestamp(),soldPrice:price?+price:null});
+      }else if(status==="archive"){
+        let reason=prompt("Archive reason?")||"";
+        await updateDoc(refDoc,{status:"archive",archivedAt:serverTimestamp(),archiveReason:reason});
+      }else{
+        await updateDoc(refDoc,{status});
+      }
+    }
+    async function deletePiano(id){ if(currentUser&&confirm("Delete this piano?")) await deleteDoc(doc(db,"pianos",id)); }
+    window.updateStatus=updateStatus; window.deletePiano=deletePiano;
+
+    const activeListEl=document.getElementById("active-list");
+    const soldListEl=document.getElementById("sold-list");
+    const archiveListEl=document.getElementById("archive-list");
+    const soldSummaryEl=document.getElementById("sold-summary");
+    const sumSalesEl=document.getElementById("sumSales");
+    const sumCostEl=document.getElementById("sumCost");
+    const sumProfitEl=document.getElementById("sumProfit");
+    const sumCommEl=document.getElementById("sumComm");
+    const sortByEl=document.getElementById("sortBy");
+
+    let docsCache=[]; let currentTab="active";
+
+    function render(){
+      activeListEl.innerHTML=""; soldListEl.innerHTML=""; archiveListEl.innerHTML="";
+      activeListEl.classList.toggle("hidden",currentTab!=="active");
+      soldListEl.classList.toggle("hidden",currentTab!=="sold");
+      archiveListEl.classList.toggle("hidden",currentTab!=="archive");
+      soldSummaryEl.classList.toggle("hidden",currentTab!=="sold");
+
+      let filtered=[...docsCache];
+      const q=document.getElementById("searchBox").value.toLowerCase();
+      if(q){ filtered=filtered.filter(d=>(d.brand||"").toLowerCase().includes(q)||(d.model||"").toLowerCase().includes(q)||(d.notes||"").toLowerCase().includes(q)||(d.year?.toString()||"").includes(q)); }
+      const loc=document.getElementById("filterLocation").value;
+      if(loc){ filtered=filtered.filter(d=>d.location===loc); }
+
+      const sortBy=sortByEl.value;
+      if(sortBy==="profit"){ filtered.sort((a,b)=>{const ap=(a.soldPrice??a.listingPrice??0)-(a.cost??0);const bp=(b.soldPrice??b.listingPrice??0)-(b.cost??0);return bp-ap;}); }
+      else { filtered.sort((a,b)=>{const at=a.createdAt?.toMillis?.()||0;const bt=b.createdAt?.toMillis?.()||0;return bt-at;}); }
+
+      if(currentTab==="sold"){
+        let totalSales=0,totalCost=0,totalProfit=0,totalComm=0;
+        for(const d of filtered.filter(x=>(x.status||"active")==="sold")){
+          const sp=(d.soldPrice!=null?d.soldPrice:d.listingPrice)||0;
+          const c=d.cost||0;
+          const profit=(sp&&d.cost!=null)?sp-c:null;
+          const comm=profit!=null?profit*0.15:null;
+          totalSales+=sp; totalCost+=c; if(profit!=null)totalProfit+=profit; if(comm!=null)totalComm+=comm;
+        }
+        sumSalesEl.textContent=money(totalSales);
+        sumCostEl.textContent=money(totalCost);
+        sumProfitEl.textContent=money(totalProfit);
+        sumCommEl.textContent=money(totalComm);
+      }
+
+      for(const d of filtered){
+        const c=document.createElement("div");
+        c.className="card";
+        let extra="";
+        if((d.status||"active")==="sold"&&d.soldAt?.toDate){
+          const sp=d.soldPrice!=null?d.soldPrice:d.listingPrice;
+          const profit=(sp!=null&&d.cost!=null)?sp-d.cost:null;
+          const commission=(profit!=null)?profit*0.15:null;
+          extra=`<div><strong>Buying Cost:</strong> ${money(d.cost)}</div>
+                 <div><strong>Listing Price:</strong> ${money(d.listingPrice)}</div>
+                 <div><strong>Sold Price:</strong> ${money(sp)}</div>
+                 <div><strong>Profit:</strong> ${profit!=null?money(profit):"—"}</div>
+                 <div><strong>Commission (15%):</strong> ${commission!=null?money(commission):"—"}</div>
+                 <div><strong>Sold on:</strong> ${d.soldAt.toDate().toLocaleDateString()}</div>`;
+        }
+        if((d.status||"active")==="archive"&&d.archivedAt?.toDate){
+          extra=`<div><strong>Archived on:</strong> ${d.archivedAt.toDate().toLocaleDateString()} ${d.archiveReason?("— "+d.archiveReason):""}</div>`;
+        }
+        c.innerHTML=`
+          ${d.photoURL?`<div><img src="${d.photoURL}" alt="photo" style="width:100%; max-height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer;" onclick="openPreview('${d.photoURL}')"></div>`:""}
+          <h3>${(d.brand||"")+(d.model?" "+d.model:"")}</h3>
+          <div class="meta">Status: ${d.status||"active"}${d.year?" • Year "+d.year:""}${d.color?" • "+d.color:""}${d.location?" • "+d.location:""}</div>
+          ${d.notes?`<div class="meta">${d.notes}</div>`:""}
+          ${extra}
+          <div class="actions">
+            <button class="blue" onclick="openView(${JSON.stringify(d).replace(/"/g,'&quot;')})">View</button>
+            ${currentUser?`
+              ${(d.status||"active")!=="sold"?`<button class="blue" onclick="updateStatus('${d._id}','sold')">Sell</button>`:""}
+              ${(d.status||"active")!=="archive"?`<button class="gray" onclick="updateStatus('${d._id}','archive')">Archive</button>`:""}
+              ${(d.status||"active")!=="active"?`<button class="green" onclick="updateStatus('${d._id}','active')">Activate</button>`:""}
+              <button class="orange" onclick="window.__setEdit('${d._id}')">Edit</button>
+              <button class="red" onclick="deletePiano('${d._id}')">Delete</button>
+            `:""}
+          </div>`;
+        if((d.status||"active")==="active")activeListEl.appendChild(c);
+        if((d.status||"active")==="sold")soldListEl.appendChild(c);
+        if((d.status||"active")==="archive")archiveListEl.appendChild(c);
+      }
+    }
+
+    // Tabs
+    document.querySelectorAll(".tab").forEach(t=>{
+      t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");currentTab=t.dataset.tab;render();};
+    });
+
+    sortByEl.addEventListener("change",()=>render());
+    document.getElementById("searchBox").addEventListener("input",()=>render());
+    document.getElementById("filterLocation").addEventListener("change",()=>render());
+
+    // Esc closes all modals
+    document.addEventListener("keydown", e=>{
+      if(e.key==="Escape"){ pianoModal.classList.add("hidden"); viewModal.classList.add("hidden"); imgPreviewModal.classList.add("hidden"); }
+    });
+
+    onSnapshot(query(collection(db,"pianos"),orderBy("createdAt","desc")),snap=>{
+      docsCache=snap.docs.map(d=>({...d.data(),_id:d.id}));
+      render();
+    });
   </script>
 </body>
 </html>
