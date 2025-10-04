@@ -4,7 +4,13 @@
   <meta charset="UTF-8" />
   <title>Piano Inventory</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Optional favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <!-- HEIC to JPG conversion -->
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.3/dist/heic2any.min.js"></script>
+
   <style>
     body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:20px; color:#111; }
     h1 { margin:0 0 20px; }
@@ -48,7 +54,7 @@
       background:rgba(0,0,0,0.6); z-index:1000; }
     .modal.hidden { display:none; }
     .modal-content {
-      background:#fff; padding:20px; border-radius:8px; max-width:500px; width:90%;
+      background:#fff; padding:20px; border-radius:8px; max-width:700px; width:95%;
       max-height:90%; overflow-y:auto; position:relative;
     }
     .modal-content h2 { margin-top:0; }
@@ -56,7 +62,35 @@
     body.dark .modal-content { background:#1e1e1e; color:#fff; }
     form input, form textarea, form select { width:100%; margin:6px 0; padding:8px; border:1px solid #ccc; border-radius:6px; }
 
+    /* Fullscreen Image Preview Modal */
     #imgPreviewModal .modal-content { background:none; box-shadow:none; padding:0; }
+
+    /* View modal slideshow */
+    .viewer { position:relative; }
+    .viewer img { max-width:100%; max-height:70vh; display:block; margin:0 auto; border-radius:8px; }
+    .nav-btn {
+      position:absolute; top:50%; transform:translateY(-50%);
+      background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%;
+      width:42px; height:42px; font-size:20px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .nav-btn.left { left:6px; }
+    .nav-btn.right { right:6px; }
+    .thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; justify-content:center; }
+    .thumbs img { width:64px; height:64px; object-fit:cover; border-radius:6px; opacity:0.7; cursor:pointer; border:2px solid transparent; }
+    .thumbs img.active { opacity:1; border-color:#007bff; }
+
+    /* Add/Edit previews */
+    #photoPreviews { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    #photoPreviews div { position:relative; display:inline-block; cursor:grab; }
+    #photoPreviews div.dragging { opacity:0.4; }
+    #photoPreviews img { width:80px; height:80px; object-fit:cover; border-radius:6px; }
+    #photoPreviews button {
+      position:absolute; top:0; right:0;
+      background:rgba(0,0,0,0.6); color:#fff; border:none; border-radius:50%;
+      width:20px; height:20px; font-size:14px; line-height:16px;
+      cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -116,21 +150,32 @@
         <input type="text" id="brand" placeholder="Brand" required>
         <input type="text" id="model" placeholder="Model">
         <input type="number" id="year" placeholder="Year">
+        <input type="number" id="manufacturedYear" placeholder="Manufactured Year">
         <input type="text" id="color" placeholder="Color">
         <input type="text" id="length" placeholder="Length">
+        <input type="text" id="manufacturedIn" placeholder="Manufactured In">
+        <input type="text" id="serialNumber" placeholder="Serial Number">
+        <input type="text" id="warranty" placeholder="Warranty">
         <select id="location">
           <option value="Gallery">Gallery</option>
           <option value="Cartersville">Cartersville</option>
         </select>
         <input type="number" id="cost" placeholder="Buying Cost">
         <input type="number" id="listingPrice" placeholder="Listing Price">
+        <input type="number" id="retailPrice" placeholder="Retail Price">
+        <input type="number" id="finalPrice" placeholder="Final Price (same as Sold Price)">
         <input type="number" id="soldPrice" placeholder="Sold Price (if sold)">
+        <input type="text" id="salesPerson" placeholder="Salesperson (who sold it)">
         <input type="text" id="archiveReason" placeholder="Archive Reason (if archived)">
         <textarea id="notes" placeholder="Notes"></textarea>
-        <input type="file" id="photo" accept="image/*">
-        <img id="photoPreview" src="" alt="Preview" style="max-width:100%; margin-top:10px; border-radius:6px; display:none;">
+
+        <!-- MULTI-PHOTO -->
+        <input type="file" id="photos" accept="image/*" multiple>
+        <div id="photoPreviews"></div>
+
         <input type="hidden" id="editingId">
-        <input type="hidden" id="currentPhotoURL">
+        <input type="hidden" id="currentPhotoURLs" value="[]">
+
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button type="submit" id="submitBtn" class="green">Add Piano</button>
           <button type="button" id="cancelEditBtn" class="gray hidden">Cancel</button>
@@ -147,11 +192,17 @@
     </div>
   </div>
 
-  <!-- View Details Modal -->
+  <!-- View Details Modal (slideshow) -->
   <div id="viewModal" class="modal hidden">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:800px;">
       <span id="closeView" class="close">&times;</span>
-      <div id="viewContent"></div>
+      <div class="viewer">
+        <button class="nav-btn left" id="prevBtn" aria-label="Previous">&#10094;</button>
+        <img id="viewerImg" src="" alt="viewer">
+        <button class="nav-btn right" id="nextBtn" aria-label="Next">&#10095;</button>
+      </div>
+      <div class="thumbs" id="viewerThumbs"></div>
+      <div id="viewDetails" style="margin-top:12px;"></div>
     </div>
   </div>
 
@@ -163,6 +214,7 @@
     import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, getDoc, orderBy, query } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
 
+    /* ===== Your real config (unchanged) ===== */
     const firebaseConfig = {
       apiKey: "AIzaSyA2932IBDCeUix6OdRaJMDIisHX0SbyDFo",
       authDomain: "pianoinv.firebaseapp.com",
@@ -172,6 +224,7 @@
       appId: "1:651707888262:web:23131a782e31a7bb511707",
       measurementId: "G-1XQLEV28JZ"
     };
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -222,28 +275,15 @@
     closeImgPreview.onclick=()=>imgPreviewModal.classList.add("hidden");
     window.openPreview=openPreview;
 
-    // View modal
+    // View modal (slideshow)
     const viewModal=document.getElementById("viewModal");
-    const viewContent=document.getElementById("viewContent");
     const closeView=document.getElementById("closeView");
+    const viewerImg=document.getElementById("viewerImg");
+    const viewerThumbs=document.getElementById("viewerThumbs");
+    const prevBtn=document.getElementById("prevBtn");
+    const nextBtn=document.getElementById("nextBtn");
+    const viewDetails=document.getElementById("viewDetails");
     closeView.onclick=()=>viewModal.classList.add("hidden");
-    function openView(d){
-      viewContent.innerHTML=`
-        ${d.photoURL?`<img src="${d.photoURL}" style="max-width:100%; border-radius:6px; margin-bottom:12px; cursor:pointer;" onclick="openPreview('${d.photoURL}')">`:""}
-        <h2>${(d.brand||"")+(d.model?" "+d.model:"")}</h2>
-        <p><strong>Year:</strong> ${d.year||"—"}</p>
-        <p><strong>Color:</strong> ${d.color||"—"}</p>
-        <p><strong>Length:</strong> ${d.length||"—"}</p>
-        <p><strong>Location:</strong> ${d.location||"—"}</p>
-        <p><strong>Buying Cost:</strong> ${money(d.cost)}</p>
-        <p><strong>Listing Price:</strong> ${money(d.listingPrice)}</p>
-        <p><strong>Sold Price:</strong> ${money(d.soldPrice)}</p>
-        <p><strong>Status:</strong> ${d.status||"active"}</p>
-        <p><strong>Notes:</strong><br>${d.notes||""}</p>
-      `;
-      viewModal.classList.remove("hidden");
-    }
-    window.openView=openView;
 
     // Form bindings
     const pianoForm=document.getElementById("pianoForm");
@@ -251,25 +291,34 @@
     const brand=document.getElementById("brand");
     const model=document.getElementById("model");
     const year=document.getElementById("year");
+    const manufacturedYear=document.getElementById("manufacturedYear");
     const color=document.getElementById("color");
     const lengthInput=document.getElementById("length");
+    const manufacturedIn=document.getElementById("manufacturedIn");
+    const serialNumber=document.getElementById("serialNumber");
+    const warranty=document.getElementById("warranty");
     const locationInput=document.getElementById("location");
     const cost=document.getElementById("cost");
     const listingPrice=document.getElementById("listingPrice");
+    const retailPrice=document.getElementById("retailPrice");
+    const finalPrice=document.getElementById("finalPrice");
     const soldPrice=document.getElementById("soldPrice");
+    const salesPerson=document.getElementById("salesPerson");
     const archiveReason=document.getElementById("archiveReason");
     const notes=document.getElementById("notes");
-    const photo=document.getElementById("photo");
-    const photoPreview=document.getElementById("photoPreview");
-    const currentPhotoURL=document.getElementById("currentPhotoURL");
-    const submitBtn=document.getElementById("submitBtn");
+
+    // MULTI-PHOTO
+    const photos=document.getElementById("photos");
+    const photoPreviews=document.getElementById("photoPreviews");
+    const currentPhotoURLsEl=document.getElementById("currentPhotoURLs");
+    let stagedFiles=[];
 
     function resetForm(){
       pianoForm.reset();
       editingId.value="";
-      currentPhotoURL.value="";
-      photoPreview.src="";
-      photoPreview.style.display="none";
+      currentPhotoURLsEl.value="[]";
+      photoPreviews.innerHTML="";
+      stagedFiles=[];
       submitBtn.textContent="Add Piano";
       submitBtn.classList.remove("orange");
       submitBtn.classList.add("green");
@@ -277,22 +326,105 @@
       modalTitle.textContent="Add Piano";
     }
 
+    // Drag sorting for thumbnails
+    let dragSrcEl=null;
+    function enableDragSorting(container){
+      [...container.children].forEach(item=>{
+        item.draggable=true;
+        item.ondragstart=()=>{ dragSrcEl=item; item.classList.add("dragging"); };
+        item.ondragend=()=>{ item.classList.remove("dragging"); updateOrder(); };
+        item.ondragover=e=>e.preventDefault();
+        item.ondrop=e=>{
+          e.preventDefault();
+          if(dragSrcEl && dragSrcEl!==item){
+            const kids=[...container.children];
+            const si=kids.indexOf(dragSrcEl);
+            const ti=kids.indexOf(item);
+            if(si<ti) container.insertBefore(dragSrcEl,item.nextSibling); else container.insertBefore(dragSrcEl,item);
+          }
+        };
+      });
+    }
+    function updateOrder(){
+      const wrappers=[...photoPreviews.children];
+      const newURLs=[]; const newStaged=[];
+      wrappers.forEach(w=>{
+        if(w.dataset.url) newURLs.push(w.dataset.url);
+        if(w.dataset.file){ const idx=+w.dataset.file; if(stagedFiles[idx]) newStaged.push(stagedFiles[idx]); }
+      });
+      currentPhotoURLsEl.value=JSON.stringify(newURLs);
+      stagedFiles=newStaged;
+    }
+
+    // Add previews (with HEIC conversion)
+    photos.addEventListener("change", async ()=>{
+      const incoming = Array.from(photos.files).slice(0, 15 - photoPreviews.children.length);
+      for (let file of incoming){
+        if(file.type==="image/heic" || file.name.toLowerCase().endsWith(".heic")){
+          try{
+            const converted=await heic2any({ blob:file, toType:"image/jpeg" });
+            file=new File([converted], file.name.replace(/\.heic$/i,".jpg"), { type:"image/jpeg" });
+          }catch(err){ showToast("HEIC conversion failed: "+err.message); }
+        }
+        stagedFiles.push(file);
+        const reader=new FileReader();
+        reader.onload=e=>{
+          const wrapper=document.createElement("div");
+          wrapper.dataset.file=stagedFiles.length-1;
+          const img=document.createElement("img");
+          img.src=e.target.result;
+          const btn=document.createElement("button");
+          btn.textContent="✕";
+          btn.onclick=()=>{ stagedFiles.splice(wrapper.dataset.file,1); wrapper.remove(); updateOrder(); };
+          wrapper.appendChild(img); wrapper.appendChild(btn);
+          photoPreviews.appendChild(wrapper);
+          enableDragSorting(photoPreviews);
+        };
+        reader.readAsDataURL(file);
+      }
+      photos.value=""; // reset input
+    });
+
     function setEdit(id,data){
       editingId.value=id;
       brand.value=data.brand||"";
       model.value=data.model||"";
       year.value=data.year!=null?data.year:"";
+      manufacturedYear.value=data.manufacturedYear!=null?data.manufacturedYear:"";
       color.value=data.color||"";
       lengthInput.value=data.length||"";
+      manufacturedIn.value=data.manufacturedIn||"";
+      serialNumber.value=data.serialNumber||"";
+      warranty.value=data.warranty||"";
       locationInput.value=data.location||"Gallery";
       cost.value=data.cost!=null?data.cost:"";
       listingPrice.value=data.listingPrice!=null?data.listingPrice:"";
+      retailPrice.value=data.retailPrice!=null?data.retailPrice:"";
+      finalPrice.value=data.finalPrice!=null?data.finalPrice:(data.soldPrice!=null?data.soldPrice:"");
       soldPrice.value=data.soldPrice!=null?data.soldPrice:"";
+      salesPerson.value=data.salesPerson||"";
       archiveReason.value=data.archiveReason||"";
       notes.value=data.notes||"";
-      currentPhotoURL.value=data.photoURL||"";
-      if(data.photoURL){ photoPreview.src=data.photoURL; photoPreview.style.display="block"; }
-      else { photoPreview.src=""; photoPreview.style.display="none"; }
+
+      // existing photos
+      photoPreviews.innerHTML=""; stagedFiles=[];
+      const arr=(data.photoURLs&&data.photoURLs.length)?data.photoURLs:(data.photoURL?[data.photoURL]:[]);
+      currentPhotoURLsEl.value=JSON.stringify(arr);
+      arr.forEach(url=>{
+        const wrapper=document.createElement("div");
+        wrapper.dataset.url=url;
+        const img=document.createElement("img"); img.src=url;
+        const btn=document.createElement("button"); btn.textContent="✕";
+        btn.onclick=()=>{
+          let a=JSON.parse(currentPhotoURLsEl.value||"[]");
+          a=a.filter(u=>u!==url); currentPhotoURLsEl.value=JSON.stringify(a);
+          wrapper.remove(); updateOrder();
+        };
+        wrapper.appendChild(img); wrapper.appendChild(btn);
+        photoPreviews.appendChild(wrapper);
+      });
+      enableDragSorting(photoPreviews);
+
       submitBtn.textContent="Save Changes";
       submitBtn.classList.remove("green");
       submitBtn.classList.add("orange");
@@ -302,52 +434,50 @@
     }
     window.__setEdit=async id=>{ const snap=await getDoc(doc(db,"pianos",id)); if(snap.exists())setEdit(id,snap.data()); else showToast("Not found"); };
 
-    // HEIC preview conversion
-    photo.addEventListener("change", async () => {
-      let file = photo.files[0];
-      if(!file){ photoPreview.src=""; photoPreview.style.display="none"; return; }
-      if(file.type==="image/heic"||file.name.toLowerCase().endsWith(".heic")){
-        try{ const converted=await heic2any({ blob:file, toType:"image/jpeg" });
-          file=new File([converted], file.name.replace(/\\.heic$/i,".jpg"), { type:"image/jpeg" });
-        }catch(err){ showToast("HEIC preview failed: "+err.message); }
-      }
-      const reader=new FileReader();
-      reader.onload=e=>{ photoPreview.src=e.target.result; photoPreview.style.display="block"; };
-      reader.readAsDataURL(file);
-    });
-
     // Save piano
+    const submitBtn=document.getElementById("submitBtn");
     pianoForm.addEventListener("submit",async e=>{
       e.preventDefault();
       if(!currentUser){ showToast("Sign in required"); return; }
       const id=editingId.value;
+
+      // align finalPrice/soldPrice
+      if(!soldPrice.value && finalPrice.value) soldPrice.value = finalPrice.value;
+
+      let urls=[]; try{ urls=JSON.parse(currentPhotoURLsEl.value||"[]"); }catch(_){ urls=[]; }
+      if(!Array.isArray(urls)) urls=[];
+      for (const f of stagedFiles){
+        const r=ref(storage,"piano_photos/"+Date.now()+"_"+f.name);
+        await uploadBytes(r,f);
+        urls.push(await getDownloadURL(r));
+        if(urls.length>=15) break;
+      }
+
       const data={ 
         brand: brand.value||null,
         model: model.value||null,
         year: year.value?+year.value:null,
+        manufacturedYear: manufacturedYear.value?+manufacturedYear.value:null,
         color: color.value||null,
         length: lengthInput.value||null,
+        manufacturedIn: manufacturedIn.value||null,
+        serialNumber: serialNumber.value||null,
+        warranty: warranty.value||null,
         location: locationInput.value||null,
         cost: cost.value?+cost.value:null,
         listingPrice: listingPrice.value?+listingPrice.value:null,
+        retailPrice: retailPrice.value?+retailPrice.value:null,
+        finalPrice: finalPrice.value?+finalPrice.value:null,
         soldPrice: soldPrice.value?+soldPrice.value:null,
+        salesPerson: salesPerson.value||null,
         archiveReason: archiveReason.value||null,
-        notes: notes.value||null
+        notes: notes.value||null,
+        photoURLs: urls
       };
-      let photoURL=currentPhotoURL.value||"";
-      if(photo.files[0]){
-        let file=photo.files[0];
-        if(file.type==="image/heic"||file.name.toLowerCase().endsWith(".heic")){
-          try{ const converted=await heic2any({ blob:file, toType:"image/jpeg" });
-            file=new File([converted], file.name.replace(/\\.heic$/i,".jpg"), { type:"image/jpeg" });
-          }catch(err){ showToast("HEIC conversion failed: "+err.message); }
-        }
-        const r=ref(storage,"piano_photos/"+Date.now()+"_"+file.name);
-        await uploadBytes(r,file);
-        photoURL=await getDownloadURL(r);
-      }
-      if(id){ await updateDoc(doc(db,"pianos",id),{...data,photoURL}); showToast("Updated"); }
-      else { await addDoc(collection(db,"pianos"),{...data,photoURL:photoURL||"",status:"active",createdAt:serverTimestamp()}); showToast("Added"); }
+
+      if(id){ await updateDoc(doc(db,"pianos",id), data); showToast("Updated"); }
+      else { await addDoc(collection(db,"pianos"),{ ...data, status:"active", createdAt:serverTimestamp() }); showToast("Added"); }
+
       resetForm(); pianoModal.classList.add("hidden");
     });
 
@@ -356,7 +486,14 @@
       const refDoc=doc(db,"pianos",id);
       if(status==="sold"){
         let price=prompt("Sold price? (blank = listing price)");
-        await updateDoc(refDoc,{status:"sold",soldAt:serverTimestamp(),soldPrice:price?+price:null});
+        let seller=prompt("Salesperson who sold it?");
+        await updateDoc(refDoc,{
+          status:"sold",
+          soldAt:serverTimestamp(),
+          soldPrice:price?+price:null,
+          finalPrice:price?+price:null,
+          salesPerson:seller||null
+        });
       }else if(status==="archive"){
         let reason=prompt("Archive reason?")||"";
         await updateDoc(refDoc,{status:"archive",archivedAt:serverTimestamp(),archiveReason:reason});
@@ -379,6 +516,11 @@
 
     let docsCache=[]; let currentTab="active";
 
+    function firstPhoto(d){
+      const arr = (d.photoURLs && d.photoURLs.length) ? d.photoURLs : (d.photoURL ? [d.photoURL] : []);
+      return arr[0] || "";
+    }
+
     function render(){
       activeListEl.innerHTML=""; soldListEl.innerHTML=""; archiveListEl.innerHTML="";
       activeListEl.classList.toggle("hidden",currentTab!=="active");
@@ -393,13 +535,26 @@
       if(loc){ filtered=filtered.filter(d=>d.location===loc); }
 
       const sortBy=sortByEl.value;
-      if(sortBy==="profit"){ filtered.sort((a,b)=>{const ap=(a.soldPrice??a.listingPrice??0)-(a.cost??0);const bp=(b.soldPrice??b.listingPrice??0)-(b.cost??0);return bp-ap;}); }
-      else { filtered.sort((a,b)=>{const at=a.createdAt?.toMillis?.()||0;const bt=b.createdAt?.toMillis?.()||0;return bt-at;}); }
+      if(sortBy==="profit"){
+        filtered.sort((a,b)=>{
+          const asp=(a.soldPrice??a.finalPrice??a.listingPrice??0);
+          const bsp=(b.soldPrice??b.finalPrice??b.listingPrice??0);
+          const ap=(asp)-(a.cost??0);
+          const bp=(bsp)-(b.cost??0);
+          return bp-ap;
+        });
+      } else {
+        filtered.sort((a,b)=>{
+          const at=a.createdAt?.toMillis?.()||0;
+          const bt=b.createdAt?.toMillis?.()||0;
+          return bt-at;
+        });
+      }
 
       if(currentTab==="sold"){
         let totalSales=0,totalCost=0,totalProfit=0,totalComm=0;
         for(const d of filtered.filter(x=>(x.status||"active")==="sold")){
-          const sp=(d.soldPrice!=null?d.soldPrice:d.listingPrice)||0;
+          const sp=(d.soldPrice??d.finalPrice??d.listingPrice)||0;
           const c=d.cost||0;
           const profit=(sp&&d.cost!=null)?sp-c:null;
           const comm=profit!=null?profit*0.15:null;
@@ -414,25 +569,39 @@
       for(const d of filtered){
         const c=document.createElement("div");
         c.className="card";
+        const main=firstPhoto(d);
+
         let extra="";
         if((d.status||"active")==="sold"&&d.soldAt?.toDate){
-          const sp=d.soldPrice!=null?d.soldPrice:d.listingPrice;
+          const sp=d.soldPrice??d.finalPrice??d.listingPrice;
           const profit=(sp!=null&&d.cost!=null)?sp-d.cost:null;
           const commission=(profit!=null)?profit*0.15:null;
           extra=`<div><strong>Buying Cost:</strong> ${money(d.cost)}</div>
                  <div><strong>Listing Price:</strong> ${money(d.listingPrice)}</div>
-                 <div><strong>Sold Price:</strong> ${money(sp)}</div>
+                 <div><strong>Retail Price:</strong> ${money(d.retailPrice)}</div>
+                 <div><strong>Sold/Final Price:</strong> ${money(sp)}</div>
                  <div><strong>Profit:</strong> ${profit!=null?money(profit):"—"}</div>
                  <div><strong>Commission (15%):</strong> ${commission!=null?money(commission):"—"}</div>
+                 <div><strong>Salesperson:</strong> ${d.salesPerson||"—"}</div>
                  <div><strong>Sold on:</strong> ${d.soldAt.toDate().toLocaleDateString()}</div>`;
         }
         if((d.status||"active")==="archive"&&d.archivedAt?.toDate){
           extra=`<div><strong>Archived on:</strong> ${d.archivedAt.toDate().toLocaleDateString()} ${d.archiveReason?("— "+d.archiveReason):""}</div>`;
         }
+
         c.innerHTML=`
-          ${d.photoURL?`<div><img src="${d.photoURL}" alt="photo" style="width:100%; max-height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer;" onclick="openPreview('${d.photoURL}')"></div>`:""}
+          ${main?`<div><img src="${main}" alt="photo" style="width:100%; max-height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; cursor:pointer;" onclick="openView(${JSON.stringify(d).replace(/"/g,'&quot;')})"></div>`:""}
           <h3>${(d.brand||"")+(d.model?" "+d.model:"")}</h3>
-          <div class="meta">Status: ${d.status||"active"}${d.year?" • Year "+d.year:""}${d.color?" • "+d.color:""}${d.location?" • "+d.location:""}</div>
+          <div class="meta">
+            Status: ${d.status||"active"}
+            ${d.year?" • Year "+d.year:""}
+            ${d.manufacturedYear?" • Mfr Year "+d.manufacturedYear:""}
+            ${d.color?" • "+d.color:""}
+            ${d.length?" • "+d.length:""}
+            ${d.location?" • "+d.location:""}
+            ${d.manufacturedIn?" • Built in "+d.manufacturedIn:""}
+            ${d.serialNumber?" • SN "+d.serialNumber:""}
+          </div>
           ${d.notes?`<div class="meta">${d.notes}</div>`:""}
           ${extra}
           <div class="actions">
@@ -460,15 +629,68 @@
     document.getElementById("searchBox").addEventListener("input",()=>render());
     document.getElementById("filterLocation").addEventListener("change",()=>render());
 
-    // Esc closes all modals
+    // Esc closes modals + arrow keys for slideshow
     document.addEventListener("keydown", e=>{
       if(e.key==="Escape"){ pianoModal.classList.add("hidden"); viewModal.classList.add("hidden"); imgPreviewModal.classList.add("hidden"); }
+      if(!viewModal.classList.contains("hidden") && (e.key==="ArrowRight" || e.key==="ArrowLeft")){
+        if(e.key==="ArrowRight") __galleryNext();
+        else __galleryPrev();
+      }
     });
 
     onSnapshot(query(collection(db,"pianos"),orderBy("createdAt","desc")),snap=>{
       docsCache=snap.docs.map(d=>({...d.data(),_id:d.id}));
       render();
     });
+
+    // ===== View modal slideshow (uses saved order) =====
+    let __gallery = { urls: [], idx: 0, meta: {} };
+    function renderViewer(){
+      const url = __gallery.urls[__gallery.idx] || "";
+      viewerImg.src = url || "";
+      viewerThumbs.innerHTML="";
+      __gallery.urls.forEach((u,i)=>{
+        const t=document.createElement("img"); t.src=u;
+        if(i===__gallery.idx) t.classList.add("active");
+        t.onclick=()=>{ __gallery.idx=i; renderViewer(); };
+        viewerThumbs.appendChild(t);
+      });
+      const d = __gallery.meta;
+      viewDetails.innerHTML = `
+        <h2 style="margin:0 0 6px;">${(d.brand||'') + (d.model?(' '+d.model):'')}</h2>
+        <div class="meta">
+          ${d.year?`Year ${d.year} • `:''}
+          ${d.manufacturedYear?`Mfr Year ${d.manufacturedYear} • `:''}
+          ${d.color?`${d.color} • `:''}
+          ${d.length?`${d.length} • `:''}
+          ${d.location||''}
+          ${d.manufacturedIn?` • Built in ${d.manufacturedIn}`:''}
+          ${d.serialNumber?` • SN ${d.serialNumber}`:''}
+        </div>
+        <div class="meta" style="margin-top:6px;">
+          ${d.listingPrice!=null?`Listing: ${money(d.listingPrice)} • `:''}
+          ${d.retailPrice!=null?`Retail: ${money(d.retailPrice)} • `:''}
+          ${(d.soldPrice??d.finalPrice)!=null?`Sold: ${money(d.soldPrice??d.finalPrice)} • `:''}
+          ${d.cost!=null?`Cost: ${money(d.cost)}`:''}
+        </div>
+        ${d.salesPerson?`<div class="meta" style="margin-top:6px;">Salesperson: ${d.salesPerson}</div>`:''}
+        ${d.warranty?`<div class="meta" style="margin-top:6px;">Warranty: ${d.warranty}</div>`:''}
+        ${d.notes?`<div class="meta" style="margin-top:6px;">${d.notes}</div>`:''}
+      `;
+    }
+    window.__galleryPrev = function(){ if(!__gallery.urls.length) return; __gallery.idx = (__gallery.idx-1+__gallery.urls.length)%__gallery.urls.length; renderViewer(); }
+    window.__galleryNext = function(){ if(!__gallery.urls.length) return; __gallery.idx = (__gallery.idx+1)%__gallery.urls.length; renderViewer(); }
+
+    prevBtn.onclick=()=>__galleryPrev();
+    nextBtn.onclick=()=>__galleryNext();
+
+    function openView(d){
+      const urls = (d.photoURLs && d.photoURLs.length) ? d.photoURLs : (d.photoURL ? [d.photoURL] : []);
+      __gallery = { urls, idx: 0, meta: d };
+      renderViewer();
+      viewModal.classList.remove("hidden");
+    }
+    window.openView=openView;
   </script>
 </body>
 </html>
